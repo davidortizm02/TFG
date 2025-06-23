@@ -139,7 +139,7 @@ st.title("🧠 Clasificador de Lesiones Cutáneas")
 st.markdown("Sube una imagen de una lesión y completa los metadatos para predecir su clase y extraer características.")
 
 # CLASES y METADATA
-CLASSES = ['AK', 'BCC', 'BKL', 'DF', 'MEL', 'NV', 'SCC', 'VASC']
+CLASSES = ['MEL', 'NV', 'BCC', 'AK', 'BKL', 'DF', 'VASC', 'SCC']
 # CAMBIO: no fit aquí; cargaremos LabelEncoder guardado
 # le_class = LabelEncoder(); le_class.fit(CLASSES)
 
@@ -248,14 +248,15 @@ if tile is not None:
     st.image(tile, caption="Imagen original", use_container_width=True)
     proc_img = preprocess_image(tile)
     img_input = np.expand_dims(proc_img, axis=0)
-
+    
+    st.image(proc_img, caption="Imagen procesada", use_container_width=True)
     # Extracción de características
     img_np = (proc_img * 255).astype(np.uint8)
     gray = cv2.cvtColor(img_np, cv2.COLOR_RGB2GRAY)
     feats_raw = extract_features_from_array(img_np, gray, feature_columns)  # CAMBIO: pasar feature_columns
     df_feats = pd.DataFrame([feats_raw])
-    st.subheader("📑 Características extraídas")
-    st.table(df_feats)
+    #st.subheader("📑 Características extraídas")
+    #st.table(df_feats)
     # Advertencia si todo NaN
     if all(pd.isna(v) for v in feats_raw.values()):
         st.warning("No se detectó lesión; se usarán valores de imputación para características de imagen.")
