@@ -13,7 +13,7 @@ from skimage.morphology import closing, opening, disk
 # Implementación personalizada de Focal Loss
 # =====================
 class CategoricalFocalCrossentropy(tf.keras.losses.Loss):
-    def __init__(self, gamma=2.0, alpha=None, from_logits=False, **kwargs):
+    def __init__(self, gamma=0.5, alpha=None, from_logits=False, **kwargs):
         super().__init__(**kwargs)
         self.gamma = gamma
         self.alpha = alpha
@@ -141,7 +141,7 @@ st.markdown("Sube una imagen de una lesión y completa los metadatos para predec
 # CLASES y METADATA
 CLASSES = ['MEL', 'NV', 'BCC', 'AK', 'BKL', 'DF', 'VASC', 'SCC']
 # CAMBIO: no fit aquí; cargaremos LabelEncoder guardado
-le_class = LabelEncoder(); le_class.fit(CLASSES)
+#le_class = LabelEncoder(); le_class.fit(CLASSES)
 
 # CAMBIO: cargar lista de columnas, pipeline y labelencoder
 import joblib, json
@@ -166,17 +166,12 @@ def load_trained_model():
         custom_objects={'CategoricalFocalCrossentropy': CategoricalFocalCrossentropy},
         compile=False
     )
-    model.compile(
-        optimizer="adam",
-        loss=CategoricalFocalCrossentropy(gamma=2.0, alpha=None, from_logits=False),
-        metrics=["accuracy"]
-    )
     return model
 
 # Cargar recursos
 feature_columns = load_feature_columns()  # lista de 26 columnas
 preprocessor = load_preprocessor()
-#le_class = load_labelencoder()
+le_class = load_labelencoder()
 model = load_trained_model()
 
 # Preprocesamiento imagen (sin cambios)
