@@ -2,10 +2,49 @@ import streamlit as st
 import numpy as np
 import cv2
 import pandas as pd
-from tensorflow_addons.losses import CategoricalFocalCrossentropy 
 from PIL import Image
 from tensorflow.keras.models import load_model
 from sklearn.preprocessing import LabelEncoder
+import tensorflow as tf
+
+# =====================
+# Implementación personalizada de Focal Loss
+# =====================
+class CategoricalFocalCrossentropy(tf.keras.losses.Loss):
+    def __init__(self, gamma=2.0, alpha=None, from_logits=False, **kwargs):
+        super().__init__(**kwargs)
+        self.gamma = gamma
+        self.alpha = alpha
+        self.from_logits = from_logits
+
+    def call(self, y_true, y_pred):
+        y_pred = tf.convert_to_tensor(y_pred)
+        y_true = tf.cast(y_true, y_pred.dtype)
+
+        if self.from_logits:
+            y_pred = tf.nn.softmax(y_pred)
+
+        epsilon = tf.keras.backend.epsilon()
+        y_pred = tf.clip_by_value(y_pred, epsilon, 1. - epsilon)
+
+        cross_entropy = -y_true * tf.math.log(y_pred)
+        loss = tf.math.pow(1 - y_pred, self.gamma) * cross_entropy
+
+        if self.alpha is not None:
+            alpha_tensor = tf.constant(self.alpha, dtype=y_pred.dtype)
+            alpha_factor = y_true * alpha_tensor
+            loss = alpha_factor * loss
+
+        return tf.reduce_sum(loss, axis=1)
+
+    def get_config(self):
+        config = super().get_config()
+        config.update({
+            "gamma": self.gamma,
+            "alpha": self.alpha,
+            "from_logits": self.from_logits
+        })
+        return config
 
 # =====================
 # CONFIGURACIÓN INICIAL
@@ -22,7 +61,7 @@ le_class = LabelEncoder()
 le_class.fit(CLASSES)
 
 # =====================
-# Cargar el modelo con pérdida focal
+# Cargar el modelo
 # =====================
 @st.cache_resource
 def load_trained_model():
@@ -83,7 +122,6 @@ sexo = st.selectbox("Sexo", options=["male", "female"])
 site = st.selectbox("Zona anatómica", options=["head/neck", "torso", "lower extremity", "upper extremity", "palms/soles", "oral/genital", "unknown"])
 dataset = st.selectbox("Fuente del dataset", options=["vidir", "msk", "unknown"])
 
-# Interacción edad + sexo
 if edad <= 35:
     age_group = "young"
 elif edad <= 65:
@@ -92,11 +130,8 @@ else:
     age_group = "senior"
 interaction = f"{sexo}_{age_group}"
 
-# Puedes ajustar este orden de columnas si usas un preprocesador distinto
 columns = ["age_approx", "sex", "anatom_site_general", "dataset", "age_sex_interaction"]
 
-# One-hot encoding manual en orden (suponiendo 20 columnas como en tu preprocesador final)
-# Este vector debería construirse exactamente como se entrenó el modelo
 def manual_metadata_encoding():
     df = pd.DataFrame([{
         "age_approx": edad,
@@ -105,8 +140,7 @@ def manual_metadata_encoding():
         "dataset": dataset,
         "age_sex_interaction": interaction
     }])
-    # Sustituir esto por el preprocesador real si se serializó con joblib/pkl
-    return np.zeros((1, 26), dtype=np.float32)  # << Cambia esto si tienes otra cantidad real
+    return np.zeros((1, 26), dtype=np.float32)  # Sustituye por tu preprocesamiento real
 
 # =====================
 # Clasificación
@@ -120,10 +154,8 @@ if uploaded_file is not None:
     processed_img = preprocess_image(uploaded_file)
     img_input = np.expand_dims(processed_img, axis=0)
 
-    # Obtener metadatos en forma de vector
     meta_input = manual_metadata_encoding()
 
-    # Predicción
     prediction = model.predict([img_input, meta_input])
     predicted_class = np.argmax(prediction, axis=1)[0]
     class_label = le_class.inverse_transform([predicted_class])[0]
@@ -135,4 +167,3 @@ if uploaded_file is not None:
 
     st.markdown("---")
     st.caption("Hecho con ❤️ usando Streamlit para el TFG")
-
