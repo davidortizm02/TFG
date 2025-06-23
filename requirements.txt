@@ -1,0 +1,15 @@
+# Interfaz web
+streamlit>=1.31.0
+
+# Procesamiento de imágenes
+opencv-python-headless>=4.8.1
+scikit-image>=0.22.0
+Pillow>=10.0.0
+numpy>=1.24.0
+
+# Machine Learning / Deep Learning
+tensorflow>=2.13.0
+keras>=2.13.1
+
+# Utilidades
+tqdm>=4.66.0
