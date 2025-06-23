@@ -65,7 +65,7 @@ le_class.fit(CLASSES)
 # =====================
 @st.cache_resource
 def load_trained_model():
-    model = load_model("final_global_fedavg_model (1).keras", custom_objects={
+    model = load_model("modelo_hibrido_entrenado.h5", custom_objects={
         'CategoricalFocalCrossentropy': CategoricalFocalCrossentropy
     })
     return model
