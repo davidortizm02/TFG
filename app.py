@@ -60,27 +60,6 @@ CLASSES = ['AK', 'BCC', 'BKL', 'DF', 'MEL', 'NV', 'SCC', 'VASC']
 le_class = LabelEncoder()
 le_class.fit(CLASSES)
 
-from tensorflow.keras.layers import InputLayer as _InputLayer
-import tensorflow as tf
-
-class InputLayer(_InputLayer):
-    @classmethod
-    def from_config(cls, config):
-        # si existe 'batch_shape', lo renombramos
-        if 'batch_shape' in config:
-            config['batch_input_shape'] = config.pop('batch_shape')
-        return super().from_config(config)
-
-# luego al cargar:
-model = tf.keras.models.load_model(
-    "modelo_hibrido_entrenado.h5",
-    custom_objects={
-        'InputLayer': InputLayer,
-        'CategoricalFocalCrossentropy': CategoricalFocalCrossentropy
-    },
-    compile=False
-)
-'''
 # =====================
 # Cargar el modelo
 # =====================
@@ -100,8 +79,7 @@ def load_trained_model():
     )
     return model
 
-
-model = load_trained_model()'''
+model = load_trained_model()
 
 # =====================
 # Preprocesamiento de imagen
