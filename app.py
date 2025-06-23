@@ -276,7 +276,9 @@ if tile is not None:
 
     # Predicción
     prediction = model.predict([img_input, X_meta])
+    st.write("Vector crudo de predicción:", prediction)  # muestra la salida completa
     pred_class = np.argmax(prediction, axis=1)[0]
+
     class_label = le_class.inverse_transform([pred_class])[0]
     confidence = float(np.max(prediction)) * 100
     st.subheader("📊 Resultado de la predicción")
