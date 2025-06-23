@@ -65,10 +65,20 @@ le_class.fit(CLASSES)
 # =====================
 @st.cache_resource
 def load_trained_model():
-    model = load_model("modelo_hibrido_entrenado.h5", custom_objects={
-        'CategoricalFocalCrossentropy': CategoricalFocalCrossentropy
-    })
+    # 1) Carga sin compilar
+    model = load_model(
+        "modelo_hibrido_entrenado.h5",
+        custom_objects={'CategoricalFocalCrossentropy': CategoricalFocalCrossentropy},
+        compile=False
+    )
+    # 2) Re-compila con tu loss
+    model.compile(
+        optimizer="adam",
+        loss=CategoricalFocalCrossentropy(gamma=2.0, alpha=None, from_logits=False),
+        metrics=["accuracy"]
+    )
     return model
+
 
 model = load_trained_model()
 
