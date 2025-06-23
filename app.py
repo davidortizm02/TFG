@@ -141,7 +141,7 @@ st.markdown("Sube una imagen de una lesión y completa los metadatos para predec
 # CLASES y METADATA
 CLASSES = ['MEL', 'NV', 'BCC', 'AK', 'BKL', 'DF', 'VASC', 'SCC']
 # CAMBIO: no fit aquí; cargaremos LabelEncoder guardado
-# le_class = LabelEncoder(); le_class.fit(CLASSES)
+le_class = LabelEncoder(); le_class.fit(CLASSES)
 
 # CAMBIO: cargar lista de columnas, pipeline y labelencoder
 import joblib, json
@@ -176,7 +176,7 @@ def load_trained_model():
 # Cargar recursos
 feature_columns = load_feature_columns()  # lista de 26 columnas
 preprocessor = load_preprocessor()
-le_class = load_labelencoder()
+#le_class = load_labelencoder()
 model = load_trained_model()
 
 # Preprocesamiento imagen (sin cambios)
