@@ -8,10 +8,6 @@ from sklearn.preprocessing import LabelEncoder
 import tensorflow as tf
 from skimage.feature import graycomatrix, graycoprops, local_binary_pattern
 from skimage.morphology import closing, opening, disk
-from sklearn.impute import SimpleImputer
-from sklearn.pipeline import make_pipeline
-from sklearn.preprocessing import StandardScaler, OneHotEncoder
-from sklearn.compose import ColumnTransformer
 
 # =====================
 # Implementación personalizada de Focal Loss
@@ -48,64 +44,121 @@ class CategoricalFocalCrossentropy(tf.keras.losses.Loss):
         return config
 
 # =====================
-# Configuración de preprocesamiento de metadatos
+# Parámetros para extracción de características
 # =====================
+GLCM_DISTANCES = [1, 2, 4]
+GLCM_ANGLES    = [0, np.pi/4, np.pi/2, 3*np.pi/4]
+GLCM_LEVELS    = 8
+LBP_RADIUS     = 1
+LBP_POINTS     = 8 * LBP_RADIUS
 
-def get_age_sex_interaction(row):
-    age = row['age_approx']
-    sex = row['sex']
-    if age <= 35:
-        age_group = 'young'
-    elif age <= 65:
-        age_group = 'adult'
-    else:
-        age_group = 'senior'
-    return f"{sex}_{age_group}"
+# =====================
+# Funciones de extracción
+# =====================
+def segment_lesion(gray_img):
+    blur = cv2.GaussianBlur(gray_img, (5,5), 0)
+    _, mask = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    if gray_img[mask == 255].mean() < gray_img[mask == 0].mean():
+        mask = cv2.bitwise_not(mask)
+    mask = closing(mask, disk(5))
+    mask = opening(mask, disk(3))
+    return mask
+
+def compute_glcm_features(gray_roi, mask_roi):
+    quant = (gray_roi // (256 // GLCM_LEVELS)).astype(np.uint8)
+    quant[mask_roi == 0] = 0
+    glcm = graycomatrix(
+        quant,
+        distances=GLCM_DISTANCES,
+        angles=GLCM_ANGLES,
+        levels=GLCM_LEVELS,
+        symmetric=True,
+        normed=True
+    )
+    feats = {}
+    props = ['contrast', 'dissimilarity', 'homogeneity', 'energy', 'ASM', 'correlation']
+    for prop in props:
+        vals = graycoprops(glcm, prop=prop)
+        feats[f'glcm_{prop}'] = vals.mean()
+    return feats
+
+def compute_lbp_features(gray_roi, mask_roi):
+    lbp = local_binary_pattern(gray_roi, LBP_POINTS, LBP_RADIUS, method='uniform')
+    lbp_masked = lbp[mask_roi == 255].ravel()
+    n_bins = int(lbp.max() + 1)
+    hist, _ = np.histogram(lbp_masked, bins=n_bins, range=(0, n_bins), density=True)
+    # Se definen histogramas de 0 a n_bins-2 (uniform), igual que en entrenamiento
+    return {f'lbp_{i}': hist[i] for i in range(n_bins-1)}
+
+# CAMBIO: extraer características devolviendo siempre dict con todas las columnas esperadas
+def extract_features_from_array(img_rgb, gray, feature_columns):
+    mask = segment_lesion(gray)
+    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    feats = {}
+    if contours:
+        c = max(contours, key=cv2.contourArea)
+        lesion_mask = np.zeros_like(mask)
+        cv2.drawContours(lesion_mask, [c], -1, 255, -1)
+        # Color stats
+        for i, col in enumerate(['R','G','B']):
+            pix = img_rgb[:,:,i][lesion_mask==255].astype(float)
+            feats[f'mean_{col}'] = pix.mean() if pix.size else np.nan
+            feats[f'std_{col}']  = pix.std()  if pix.size else np.nan
+        # Shape metrics
+        area = cv2.contourArea(c)
+        peri = cv2.arcLength(c, True)
+        x,y,w,h = cv2.boundingRect(c)
+        rect_area = w*h
+        hull = cv2.convexHull(c)
+        hull_area = cv2.contourArea(hull)
+        feats.update({
+            'lesion_area': area,
+            'lesion_perimeter': peri,
+            'bbox_area': rect_area,
+            'solidity': area/hull_area if hull_area>0 else np.nan,
+            'extent': area/rect_area if rect_area>0 else np.nan,
+        })
+        # ROI para GLCM y LBP
+        roi_gray = gray[y:y+h, x:x+w]
+        mask_roi = lesion_mask[y:y+h, x:x+w]
+        feats.update(compute_glcm_features(roi_gray, mask_roi))
+        feats.update(compute_lbp_features(roi_gray, mask_roi))
+    # Construir dict completo con todas las columnas, rellenando NaN donde no haya valor
+    full = {col: np.nan for col in feature_columns}
+    for k, v in feats.items():
+        if k in full:
+            full[k] = v
+        # si hay claves inesperadas, se ignoran
+    return full
+
+# =====================
+# Streamlit UI
+# =====================
+st.set_page_config(page_title="Clasificador de Imágenes y Metadatos", layout="centered")
+st.title("🧠 Clasificador de Lesiones Cutáneas")
+st.markdown("Sube una imagen de una lesión y completa los metadatos para predecir su clase y extraer características.")
+
+# CLASES y METADATA
+CLASSES = ['AK', 'BCC', 'BKL', 'DF', 'MEL', 'NV', 'SCC', 'VASC']
+# CAMBIO: no fit aquí; cargaremos LabelEncoder guardado
+# le_class = LabelEncoder(); le_class.fit(CLASSES)
+
+# CAMBIO: cargar lista de columnas, pipeline y labelencoder
+import joblib, json
 
 @st.cache_resource
-def load_metadata_preprocessor(path_csv):
-    df = pd.read_csv(path_csv)
-    # Anatomía como NaN inicial
-    df['anatom_site_general'] = df['anatom_site_general'].fillna(np.nan)
-    # Crear interaccion edad-sex
-    df['age_sex_interaction'] = df.apply(get_age_sex_interaction, axis=1)
-    # Asegurar tipo string
-    for col in ['sex','dataset']:
-        df[col] = df[col].astype(object)
-    # Columnas a usar
-    categorical_cols = ['sex','anatom_site_general','dataset','age_sex_interaction']
-    numerical_continuous = ['age_approx']
-    color_texture_cols = [col for col in df.columns if col.startswith(('mean_','std_','glcm_','lbp_','lesion_','bbox_'))]
-    # Imputadores y pipelines
-    cat_imp = SimpleImputer(strategy='constant', fill_value='unknown')
-    num_scale_pipe = make_pipeline(
-        SimpleImputer(strategy='median'),
-        StandardScaler()
-    )
-    cat_pipe = make_pipeline(
-        cat_imp,
-        OneHotEncoder(sparse_output=False, handle_unknown='ignore')
-    )
-    pre = ColumnTransformer(
-        transformers=[
-            ('num_scale', num_scale_pipe, numerical_continuous + color_texture_cols),
-            ('cat', cat_pipe, categorical_cols)
-        ], verbose_feature_names_out=False, remainder='drop'
-    )
-    # Fit solo sobre entrenamiento si existe columna 'subset'
-    if 'subset' in df.columns:
-        train_df = df[df['subset']=='train']
-    else:
-        train_df = df
-    pre.fit(train_df)
-    return pre
+def load_feature_columns():
+    with open("feature_columns.json", "r") as f:
+        return json.load(f)
 
-# Cargar preprocesador y label encoder de clases
-preprocessor = load_metadata_preprocessor('metadata.csv')  # Ajusta la ruta a tu CSV
-le_classes = LabelEncoder()
-le_classes.fit(['AK','BCC','BKL','DF','MEL','NV','SCC','VASC'])
+@st.cache_resource
+def load_preprocessor():
+    return joblib.load("preprocessor_metadata.pkl")
 
-# Cargar modelo
+@st.cache_resource
+def load_labelencoder():
+    return joblib.load("labelencoder_class.pkl")
+
 @st.cache_resource
 def load_trained_model():
     model = load_model(
@@ -120,9 +173,13 @@ def load_trained_model():
     )
     return model
 
+# Cargar recursos
+feature_columns = load_feature_columns()  # lista de 26 columnas
+preprocessor = load_preprocessor()
+le_class = load_labelencoder()
 model = load_trained_model()
 
-# Preprocesamiento imagen
+# Preprocesamiento imagen (sin cambios)
 def center_crop_to_square(img):
     h, w = img.shape[:2]
     if h == w: return img.copy()
@@ -155,34 +212,72 @@ def preprocess_image(image_file):
     return processed.astype('float32') / 255.0
 
 # Formulario metadatos
-df_meta = pd.DataFrame(columns=['age_approx','sex','anatom_site_general','dataset','age_sex_interaction'])
+st.subheader("📋 Introduce los metadatos")
 edad = st.number_input("Edad aproximada", min_value=0, max_value=100, value=50)
-sexo = st.selectbox("Sexo", options=["male","female"])
-site = st.selectbox("Zona anatómica", options=["head/neck","torso","lower extremity","upper extremity","palms/soles","oral/genital","unknown"])
-dataset = st.selectbox("Fuente del dataset", options=["BCN_nan","HAM_vidir_molemax","HAM_vidir_modern","HAM_rosendahl","MSK4nan","HAM_vienna_dias"])
-interaction = get_age_sex_interaction({'age_approx':edad,'sex':sexo})
-# Preparar DataFrame de entrada
-row = {'age_approx':edad,'sex':sexo,'anatom_site_general':site,'dataset':dataset,'age_sex_interaction':interaction}
-meta_df = pd.DataFrame([row])
-meta_input = preprocessor.transform(meta_df)
+sexo = st.selectbox("Sexo", options=["male", "female"])
+# Asegúrate de que estos strings coincidan exactamente con los usados en entrenamiento
+site = st.selectbox("Zona anatómica", options=["head/neck", "torso", "lower extremity", "upper extremity", "palms/soles", "oral/genital", "unknown"])
+dataset = st.selectbox("Fuente del dataset", options=["BCN_nan", "HAM_vidir_molemax", "HAM_vidir_modern", "HAM_rosendahl", "MSK4nan", "HAM_vienna_dias"])
 
-# Subida y procesamiento de imagen
-tile = st.file_uploader("Sube una imagen de piel", type=["jpg","jpeg","png"])
+# CAMBIO: función para construir DataFrame de metadatos + features
+def build_metadata_df(edad, sexo, site, dataset, feature_dict, feature_columns):
+    if edad <= 35:
+        age_group = "young"
+    elif edad <= 65:
+        age_group = "adult"
+    else:
+        age_group = "senior"
+    age_sex_interaction = f"{sexo}_{age_group}"
+    row = {
+        "age_approx": edad,
+        "sex": sexo,
+        "anatom_site_general": site,
+        "dataset": dataset,
+        "age_sex_interaction": age_sex_interaction,
+    }
+    # Añadir columnas de features de imagen
+    for col in feature_columns:
+        row[col] = feature_dict.get(col, np.nan)
+    return pd.DataFrame([row])
+
+# Eliminamos manual_metadata_encoding()
+
+# Subida y procesamiento
+tile = st.file_uploader("Sube una imagen de piel", type=["jpg", "jpeg", "png"])
 if tile is not None:
     st.image(tile, caption="Imagen original", use_container_width=True)
     proc_img = preprocess_image(tile)
     img_input = np.expand_dims(proc_img, axis=0)
 
-    feats = extract_features_from_array((proc_img*255).astype(np.uint8), cv2.cvtColor((proc_img*255).astype(np.uint8), cv2.COLOR_RGB2GRAY))
-    df_feats = pd.DataFrame([feats])
+    # Extracción de características
+    img_np = (proc_img * 255).astype(np.uint8)
+    gray = cv2.cvtColor(img_np, cv2.COLOR_RGB2GRAY)
+    feats_raw = extract_features_from_array(img_np, gray, feature_columns)  # CAMBIO: pasar feature_columns
+    df_feats = pd.DataFrame([feats_raw])
     st.subheader("📑 Características extraídas")
     st.table(df_feats)
+    # Advertencia si todo NaN
+    if all(pd.isna(v) for v in feats_raw.values()):
+        st.warning("No se detectó lesión; se usarán valores de imputación para características de imagen.")
+
+    # Construir DataFrame de metadatos + features
+    df_meta_input = build_metadata_df(edad, sexo, site, dataset, feats_raw, feature_columns)
+    st.subheader("📋 Metadata + Features (antes de transformación)")
+    st.write(df_meta_input.T)
+
+    # Transformar con pipeline
+    try:
+        X_meta = preprocessor.transform(df_meta_input)
+    except Exception as e:
+        st.error(f"Error en preprocesamiento de metadatos: {e}")
+        st.stop()
+    st.write(f"Forma de entrada de metadatos tras preprocesar: {X_meta.shape}")
 
     # Predicción
-    prediction = model.predict([img_input, meta_input])
+    prediction = model.predict([img_input, X_meta])
     pred_class = np.argmax(prediction, axis=1)[0]
-    class_label = le_classes.inverse_transform([pred_class])[0]
-    confidence = float(np.max(prediction))*100
+    class_label = le_class.inverse_transform([pred_class])[0]
+    confidence = float(np.max(prediction)) * 100
     st.subheader("📊 Resultado de la predicción")
     st.write(f"**Clase predicha:** {class_label}")
     st.write(f"**Confianza:** {confidence:.2f}%")
