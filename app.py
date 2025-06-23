@@ -2,6 +2,7 @@ import streamlit as st
 import numpy as np
 import cv2
 import pandas as pd
+from tensorflow.keras.losses import CategoricalFocalCrossentropy
 from PIL import Image
 from tensorflow.keras.models import load_model
 from tensorflow.keras.losses import CategoricalFocalCrossentropy
