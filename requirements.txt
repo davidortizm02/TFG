@@ -11,6 +11,8 @@ numpy>=1.22,<1.24
 
 # Machine Learning / Deep Learning
 tensorflow==2.12.0
-keras>=2.12.0
+keras==2.12.0  
+
+scikit-learn>=1.2.2  
 # Utilidades
 tqdm>=4.66.0
