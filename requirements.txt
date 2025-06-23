@@ -16,3 +16,13 @@ keras==3.5.0
 scikit-learn>=1.2.2  
 # Utilidades
 tqdm>=4.66.0
+
+dill>=0.3.6
+
+
+
+
+
+
+
+
