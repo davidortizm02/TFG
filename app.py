@@ -129,7 +129,7 @@ st.subheader("📋 Introduce los metadatos")
 edad = st.number_input("Edad aproximada", min_value=0, max_value=100, value=50)
 sexo = st.selectbox("Sexo", options=["male", "female"])
 site = st.selectbox("Zona anatómica", options=["head/neck", "torso", "lower extremity", "upper extremity", "palms/soles", "oral/genital", "unknown"])
-dataset = st.selectbox("Fuente del dataset", options=["vidir", "msk", "unknown"])
+dataset = st.selectbox("Fuente del dataset", options=["BCN_nan", "HAM_vidir_molemax", "HAM_vidir_modern", "HAM_rosendahl", "MSK4nan", "HAM_vienna_dias"])
 
 if edad <= 35:
     age_group = "young"
@@ -159,7 +159,7 @@ st.subheader("📷 Imagen")
 uploaded_file = st.file_uploader("Sube una imagen de piel", type=["jpg", "jpeg", "png"])
 
 if uploaded_file is not None:
-    st.image(uploaded_file, caption="Imagen original", use_column_width=True)
+    st.image(uploaded_file, caption="Imagen original", use_container_width=True)
     processed_img = preprocess_image(uploaded_file)
     img_input = np.expand_dims(processed_img, axis=0)
 
