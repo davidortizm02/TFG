@@ -30,6 +30,109 @@ def load_all_resources():
     model = load_model("modelo_hibrido_entrenadoCW.keras", compile=False)
     return feature_columns, preprocessor, label_encoder, model
 
+
+
+# =====================
+# Funciones de segmentación y extracción de features
+# =====================
+
+def segment_lesion(gray_img):
+    """Segmenta la lesión con Otsu + opening/closing + CC más grande."""
+    blur = cv2.GaussianBlur(gray_img, (5,5), 0)
+    _, mask = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    fg = gray_img[mask == 255]
+    bg = gray_img[mask == 0]
+    if fg.size and bg.size and fg.mean() < bg.mean():
+        mask = cv2.bitwise_not(mask)
+    mask_bool = opening(mask>0, disk(MORPH_OPEN_RADIUS))
+    mask_bool = closing(mask_bool, disk(MORPH_CLOSE_RADIUS))
+    labels = label(mask_bool)
+    if labels.max() == 0:
+        return np.zeros_like(mask, dtype=np.uint8)
+    regions = regionprops(labels)
+    max_r = max(regions, key=lambda r: r.area)
+    if max_r.area < MIN_LESION_AREA:
+        return np.zeros_like(mask, dtype=np.uint8)
+    return (labels == max_r.label).astype(np.uint8) * 255
+
+def compute_glcm_features(gray_roi, mask_roi):
+    """Calcula GLCM multi-distancia/ángulo en ROI enmascarada."""
+    ys, xs = np.where(mask_roi==255)
+    if ys.size==0:
+        return {f'glcm_{p}': np.nan for p in ['contrast','dissimilarity','homogeneity','energy','ASM','correlation']}
+    bins = max(1, 256 // GLCM_LEVELS)
+    quant = (gray_roi // bins).astype(np.uint8)
+    quant[mask_roi==0] = 0
+    try:
+        glcm = graycomatrix(quant, distances=GLCM_DISTANCES, angles=GLCM_ANGLES,
+                             levels=GLCM_LEVELS, symmetric=True, normed=True)
+    except Exception:
+        return {f'glcm_{p}': np.nan for p in ['contrast','dissimilarity','homogeneity','energy','ASM','correlation']}
+    feats = {}
+    for prop in ['contrast','dissimilarity','homogeneity','energy','ASM','correlation']:
+        try:
+            feats[f'glcm_{prop}'] = float(graycoprops(glcm, prop=prop).mean())
+        except Exception:
+            feats[f'glcm_{prop}'] = np.nan
+    return feats
+
+def compute_lbp_features(gray_roi, mask_roi):
+    """Calcula histograma LBP 'uniform' dentro de ROI."""
+    ys, xs = np.where(mask_roi==255)
+    if ys.size==0:
+        return {}
+    lbp = local_binary_pattern(gray_roi, LBP_POINTS, LBP_RADIUS, method='uniform')
+    vals = lbp[mask_roi==255].ravel()
+    if vals.size==0:
+        return {}
+    n_bins = int(lbp.max() + 1)
+    hist, _ = np.histogram(vals, bins=n_bins, range=(0,n_bins), density=True)
+    return {f'lbp_{i}': float(hist[i]) for i in range(n_bins)}
+
+def extract_features_from_array(img_rgb, gray):
+    """
+    Extrae todas las features de una imagen (RGB uint8 + gris), 
+    devuelve (feats_raw, segmentation_mask_uint8).
+    """
+    mask = segment_lesion(gray)
+    # Si no detecta lesión, devolvemos NaNs
+    if not np.any(mask==255):
+        return { }, mask
+    # Contorno principal
+    cnts, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    if not cnts:
+        return { }, mask
+    c = max(cnts, key=cv2.contourArea)
+    lesion_mask = np.zeros_like(mask); cv2.drawContours(lesion_mask, [c], -1, 255, -1)
+
+    feats = {}
+    # Estadísticos color
+    for i, col in enumerate(['R','G','B']):
+        pix = img_rgb[:,:,i][lesion_mask==255].astype(float)
+        feats[f'mean_{col}'] = float(pix.mean()) if pix.size else np.nan
+        feats[f'std_{col}']  = float(pix.std())  if pix.size else np.nan
+
+    # Forma
+    area = cv2.contourArea(c); peri = cv2.arcLength(c, True)
+    hull = cv2.convexHull(c); hull_area = cv2.contourArea(hull)
+    solidity = float(area/hull_area) if hull_area>0 else np.nan
+    x,y,w,h = cv2.boundingRect(c)
+    extent = float(area/(w*h)) if w*h>0 else np.nan
+    feats.update({
+        'lesion_area': float(area),
+        'lesion_perimeter': float(peri),
+        'solidity': solidity,
+        'extent': extent
+    })
+
+    # GLCM & LBP sobre ROI
+    gray_roi = gray[y:y+h, x:x+w]
+    mask_roi = lesion_mask[y:y+h, x:x+w]
+    feats.update(compute_glcm_features(gray_roi, mask_roi))
+    feats.update(compute_lbp_features(gray_roi, mask_roi))
+
+    return feats, mask
+
 # =====================
 # Preprocesamiento de la imagen para el modelo
 # =====================
