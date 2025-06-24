@@ -372,6 +372,9 @@ if tile is not None and submit_button:
             st.subheader("Características numéricas extraídas (raw)")
             st.dataframe(pd.DataFrame([feats_raw]))
             
+        # --- Preparación de metadatos ---
+ 
+
 # --- Procesamiento y Predicción ---
 if tile is not None and submit_button:
     with col2:
@@ -423,8 +426,12 @@ if tile is not None and submit_button:
         #    exactamente con las que el preprocesador fue entrenado (`feature_columns`).
         #    Esto garantiza el orden y la presencia correctos de cada columna.
         df_meta_input = pd.DataFrame([input_data], columns=feature_columns)
-        
-        # **==== FIN DEL CÓDIGO CORREGIDO ====**
+        # --- Preprocesamiento de metadatos ---
+        try:
+            X_meta = preprocessor.transform(df_meta_input)
+        except Exception as e:
+            st.error(f"Error al transformar los metadatos con el pipeline: {e}")
+            st.stop()
         
         with st.expander("🔬 Diagnóstico: Preprocesamiento de Metadatos", expanded=True):
             st.info("Estos son los datos que entran al pipeline y la matriz final que recibe la red neuronal.")
