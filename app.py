@@ -251,6 +251,7 @@ def extract_features_from_array(img_rgb_uint8, gray_uint8, feature_columns):
 # =====================
 # Carga de recursos (cacheado)
 # =====================
+
 @st.cache_resource
 def load_all_resources():
     """Carga todos los modelos y preprocesadores de una vez."""
@@ -259,9 +260,10 @@ def load_all_resources():
     
     preprocessor = joblib.load("preprocessor_metadata.pkl")
     label_encoder = joblib.load("labelencoder_class.pkl")
-    
+    keras.config.enable_unsafe_deserialization()
+
     model = load_model(
-        "modelo_imagenes_entrenado.keras",
+        "modelo_imagenes_entrenado.h5",
         custom_objects={'CategoricalFocalCrossentropy': CategoricalFocalCrossentropy},
         compile=False  # Para predicción no es necesario recompilar
     )
