@@ -263,7 +263,7 @@ def load_all_resources():
     keras.config.enable_unsafe_deserialization()
 
     model = load_model(
-        "modelo_hibrido_entrenado.h5",
+        "modelo_hibrido_entrenadoSINEXTRACCION.keras",
         custom_objects={'CategoricalFocalCrossentropy': CategoricalFocalCrossentropy},
         compile=False  # Para predicción no es necesario recompilar
     )
@@ -386,7 +386,7 @@ if tile is not None and submit_button:
             "anatom_site_general": site,
             "dataset": dataset,
             "age_sex_interaction": f"{sexo}_{age_group}",
-            **feats_raw
+            #**feats_raw
         }])
         
         # --- Preprocesamiento de metadatos ---
