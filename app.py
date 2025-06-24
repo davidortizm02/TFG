@@ -10,7 +10,7 @@ from skimage.morphology import closing, opening, disk
 from skimage.measure import label, regionprops
 import joblib
 import json
-
+import keras
 # =====================
 # Constantes de segmentación
 # =====================
