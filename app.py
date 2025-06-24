@@ -163,7 +163,7 @@ def load_labelencoder():
 def load_trained_model():
     model = load_model(
         "modelo_hibrido_entrenado.h5",
-        custom_objects={'CategoricalFocalCrossentropy': CategoricalFocalCrossentropy},
+        #custom_objects={'CategoricalFocalCrossentropy': CategoricalFocalCrossentropy},
         compile=False
     )
     return model
@@ -209,9 +209,16 @@ def preprocess_image(image_file):
 # Formulario metadatos
 st.subheader("📋 Introduce los metadatos")
 edad = st.number_input("Edad aproximada", min_value=0, max_value=100, value=50)
-sexo = st.selectbox("Sexo", options=["male", "female"])
+sexo = st.selectbox("Sexo", options=["male", "female", "unknown"])
 # Asegúrate de que estos strings coincidan exactamente con los usados en entrenamiento
-site = st.selectbox("Zona anatómica", options=["head/neck", "torso", "lower extremity", "upper extremity", "palms/soles", "oral/genital", "unknown"])
+site = st.selectbox("Zona anatómica", options=["anterior torso", 
+    "head/neck",
+    "lateral torso",
+    "lower extremity",
+    "upper extremity",
+    "oral/genital",
+    "palms/soles",
+    "posterior torso",  "unknown"])
 dataset = st.selectbox("Fuente del dataset", options=["BCN_nan", "HAM_vidir_molemax", "HAM_vidir_modern", "HAM_rosendahl", "MSK4nan", "HAM_vienna_dias"])
 
 # CAMBIO: función para construir DataFrame de metadatos + features
