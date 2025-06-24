@@ -371,6 +371,32 @@ if tile is not None and submit_button:
             
             st.subheader("Características numéricas extraídas (raw)")
             st.dataframe(pd.DataFrame([feats_raw]))
+# --- Procesamiento y Predicción ---
+if tile is not None and submit_button:
+    with col2:
+        st.header("3. Análisis y Predicción")
+        
+        # --- Preprocesamiento de la imagen ---
+        img_for_model = preprocess_image_for_model(tile)  # float32 [0,1], shape (224,224,3)
+        img_for_features = (img_for_model * 255).astype(np.uint8)
+        gray_for_features = cv2.cvtColor(img_for_features, cv2.COLOR_RGB2GRAY)
+        
+        # --- Extracción de características ---
+        feats_raw, segmentation_mask = extract_features_from_array(img_for_features, gray_for_features, feature_columns)
+        
+        with st.expander("🔍 Diagnóstico: Extracción de Características", expanded=True):
+            st.info("Aquí puedes ver el resultado de la segmentación de la lesión y las características numéricas extraídas de ella.")
+            
+            c1, c2 = st.columns(2)
+            c1.image(img_for_model, caption="Imagen Procesada (224x224)", use_container_width=True)
+            c2.image(segmentation_mask, caption="Máscara de Lesión Segmentada", use_container_width=True)
+            st.caption("Si la máscara es negra o no resalta la lesión, las características serán incorrectas (NaNs) y el modelo dependerá solo de los metadatos.")
+
+            if all(pd.isna(v) for v in feats_raw.values()):
+                st.warning("No se detectó ninguna lesión. Todas las características de la imagen son NaN y serán imputadas por el preprocesador a sus valores medios/medianos.")
+            
+            st.subheader("Características numéricas extraídas (raw)")
+            st.dataframe(pd.DataFrame([feats_raw]))
             
         # --- Preparación de metadatos ---
         if edad <= 35:
@@ -380,15 +406,25 @@ if tile is not None and submit_button:
         else:
             age_group = "senior"
         
-        df_meta_input = pd.DataFrame([{
+        # **==== INICIO DEL CÓDIGO CORREGIDO ====**
+
+        # 1. Recolectar todos los datos disponibles en un único diccionario.
+        input_data = {
             "age_approx": edad,
             "sex": sexo,
             "anatom_site_general": site,
             "dataset": dataset,
             "age_sex_interaction": f"{sexo}_{age_group}",
-            **feats_raw
-        }])
+            **feats_raw  # Añadir las características extraídas de la imagen
+        }
+
+        # 2. Crear un DataFrame de una sola fila, asegurando que las columnas coincidan
+        #    exactamente con las que el preprocesador fue entrenado (`feature_columns`).
+        #    Esto garantiza el orden y la presencia correctos de cada columna.
+        df_meta_input = pd.DataFrame([input_data], columns=feature_columns)
         
+        # **==== FIN DEL CÓDIGO CORREGIDO ====**
+
         # --- Preprocesamiento de metadatos ---
         try:
             X_meta = preprocessor.transform(df_meta_input)
@@ -398,19 +434,19 @@ if tile is not None and submit_button:
         
         with st.expander("🔬 Diagnóstico: Preprocesamiento de Metadatos", expanded=True):
             st.info("Estos son los datos que entran al pipeline y la matriz final que recibe la red neuronal.")
-            st.subheader("Datos ANTES de la transformación")
+            st.subheader("Datos ANTES de la transformación (DataFrame estructurado)")
             st.dataframe(df_meta_input)
 
             st.subheader("Datos DESPUÉS de la transformación (Entrada final al modelo)")
-            st.caption(f"Esta es la matriz numérica (shape: {X_meta.shape}) que realmente recibe la red. **Si esta matriz es siempre la misma para diferentes imágenes, has encontrado la causa del problema.**")
+            st.caption(f"Esta es la matriz numérica (shape: {X_meta.shape}) que realmente recibe la red. Si esta matriz sigue siendo casi idéntica para diferentes imágenes, el problema es que la segmentación siempre falla.")
             X_meta_display = X_meta.toarray() if hasattr(X_meta, "toarray") else X_meta
             st.dataframe(pd.DataFrame(X_meta_display))
         
         # --- Predicción del modelo ---
         img_input_batch = np.expand_dims(img_for_model, axis=0)
-        # Muchas arquitecturas híbridas esperan lista [img, meta], asegúrate de que tu modelo acepta esta entrada
+        
+        # La llamada a predict es correcta para un modelo híbrido con dos entradas
         prediction = model.predict([img_input_batch, X_meta])
-        #prediction = model.predict(img_input_batch)
         
         with st.container():
             st.header("📊 Resultado Final")
@@ -430,6 +466,3 @@ if tile is not None and submit_button:
 else:
     with col2:
         st.info("Sube una imagen y rellena el formulario para ver la predicción.")
-
-st.markdown("---")
-st.caption("Aplicación para TFG. Versión con herramientas de diagnóstico.")
