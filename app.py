@@ -263,7 +263,7 @@ def load_all_resources():
     keras.config.enable_unsafe_deserialization()
 
     model = load_model(
-        "modelo_imagenes_entrenado.h5",
+        "modelo_imagenes_entrenado.keras",
         custom_objects={'CategoricalFocalCrossentropy': CategoricalFocalCrossentropy},
         compile=False  # Para predicción no es necesario recompilar
     )
