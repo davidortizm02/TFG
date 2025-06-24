@@ -264,7 +264,7 @@ def load_all_resources():
 
     model = load_model(
         "modelo_hibrido_entrenado.h5",
-        custom_objects={'CategoricalFocalCrossentropy': CategoricalFocalCrossentropy},
+        #custom_objects={'CategoricalFocalCrossentropy': CategoricalFocalCrossentropy},
         compile=False  # Para predicción no es necesario recompilar
     )
     return feature_columns, preprocessor, label_encoder, model
