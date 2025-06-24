@@ -255,15 +255,15 @@ def extract_features_from_array(img_rgb_uint8, gray_uint8, feature_columns):
 @st.cache_resource
 def load_all_resources():
     """Carga todos los modelos y preprocesadores de una vez."""
-    with open("feature_columns.json", "r") as f:
+    with open("feature_columnsDEF.json", "r") as f:
         feature_columns = json.load(f)
     
-    preprocessor = joblib.load("preprocessor_metadata52.pkl")
-    label_encoder = joblib.load("labelencoder_class.pkl")
+    preprocessor = joblib.load("preprocessor_metadataDEF.pkl")
+    label_encoder = joblib.load("labelencoder_classDEF.pkl")
     keras.config.enable_unsafe_deserialization()
 
     model = load_model(
-        "modelo_hibrido_entrenado.h5",
+        "modelo_hibrido_entrenadoDEF.keras",
         #custom_objects={'CategoricalFocalCrossentropy': CategoricalFocalCrossentropy},
         compile=False  # Para predicción no es necesario recompilar
     )
