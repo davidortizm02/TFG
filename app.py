@@ -214,7 +214,6 @@ with col1:
             "HAM_rosendahl","MSK4nan","HAM_vienna_dias"
         ])
         submit_button = st.form_submit_button("Realizar Predicción")
-
 if tile and submit_button:
     with col2:
         st.header("3. Análisis y Predicción")
@@ -230,9 +229,12 @@ if tile and submit_button:
             st.dataframe(pd.DataFrame([feats_raw]).fillna("NaN"))
 
         # Codificar age_group
-        if edad<=35: grp="young"
-        elif edad<=65: grp="adult"
-        else: grp="senior"
+        if edad <= 35:
+            grp = "young"
+        elif edad <= 65:
+            grp = "adult"
+        else:
+            grp = "senior"
 
         df_meta = pd.DataFrame([{
             "age_approx": edad,
@@ -243,41 +245,7 @@ if tile and submit_button:
             **feats_raw
         }])
 
-        # Transformar metadatos
-        try:
-            X_meta = preprocessor.transform(df_meta)
-        except Exception as e:
-            st.error(f"Error en preprocesado: {e}")
-            st.stop()
-
-        with st.expander("🔬 Diagnóstico: Preprocesamiento Metadatos", expanded=True):
-            st.subheader("Antes de transformar")
-            st.dataframe(df_meta.fillna("NaN"))
-            st.subheader("Después de transformar")
-            arr = X_meta.toarray() if hasattr(X_meta,"toarray") else X_meta
-            st.dataframe(pd.DataFrame(arr))
-
-        # Predicción
-        pred_img = np.expand_dims(img_model, axis=0)
-        pred = model.predict([pred_img, X_meta], verbose=0)
-        idx = np.argmax(pred, axis=1)[0]
-        conf = float(np.max(pred))
-        label = le_class.inverse_transform([idx])[0]
-
-        st.success(f"**Clase:** {label}  |  **Confianza:** {conf:.2%}")
-        dfp = pd.DataFrame({
-            "Clase": le_class.classes_,
-            "Probabilidad": pred.flatten()
-        }).set_index("Clase").sort_values("Probabilidad", ascending=False)
-        st.bar_chart(dfp)
-else:
-    with col2:
-        st.info("Sube una imagen y completa el formulario para predecir.")
-
-
-        # ——————————————————————————————
         # Transformar metadatos y forzar vector a ceros (para test)
-        # ——————————————————————————————
         try:
             X_meta = preprocessor.transform(df_meta)
         except Exception as e:
@@ -297,24 +265,25 @@ else:
         with st.expander("🔬 Diagnóstico: Preprocesamiento Metadatos", expanded=True):
             st.subheader("Antes de transformar")
             st.dataframe(df_meta.fillna("NaN"))
-            st.subheader("Después de transformar (ahora ceros)")
+            st.subheader("Después de transformar (vector a ceros)")
             st.dataframe(pd.DataFrame(arr_zero))
 
-        # ——————————————————————————————
         # Predicción con vector de metadatos cero
-        # ——————————————————————————————
         pred_img = np.expand_dims(img_model, axis=0)
         pred = model.predict([pred_img, X_meta], verbose=0)
-        idx  = np.argmax(pred, axis=1)[0]
+        idx = np.argmax(pred, axis=1)[0]
         conf = float(np.max(pred))
         label = le_class.inverse_transform([idx])[0]
 
         st.success(f"**Clase:** {label}  |  **Confianza:** {conf:.2%}")
         dfp = pd.DataFrame({
-            "Clase":          le_class.classes_,
-            "Probabilidad":   pred.flatten()
+            "Clase": le_class.classes_,
+            "Probabilidad": pred.flatten()
         }).set_index("Clase").sort_values("Probabilidad", ascending=False)
         st.bar_chart(dfp)
+else:
+    with col2:
+        st.info("Sube una imagen y completa el formulario para predecir.")
 
 st.markdown("---")
 st.caption("TFG – Clasificador híbrido con diagnóstico de características.")
