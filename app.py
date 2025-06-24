@@ -371,6 +371,7 @@ if tile is not None and submit_button:
             
             st.subheader("Características numéricas extraídas (raw)")
             st.dataframe(pd.DataFrame([feats_raw]))
+            
 # --- Procesamiento y Predicción ---
 if tile is not None and submit_button:
     with col2:
@@ -424,29 +425,22 @@ if tile is not None and submit_button:
         df_meta_input = pd.DataFrame([input_data], columns=feature_columns)
         
         # **==== FIN DEL CÓDIGO CORREGIDO ====**
-
-        # --- Preprocesamiento de metadatos ---
-        try:
-            X_meta = preprocessor.transform(df_meta_input)
-        except Exception as e:
-            st.error(f"Error al transformar los metadatos con el pipeline: {e}")
-            st.stop()
         
         with st.expander("🔬 Diagnóstico: Preprocesamiento de Metadatos", expanded=True):
             st.info("Estos son los datos que entran al pipeline y la matriz final que recibe la red neuronal.")
-            st.subheader("Datos ANTES de la transformación (DataFrame estructurado)")
+            st.subheader("Datos ANTES de la transformación")
             st.dataframe(df_meta_input)
 
             st.subheader("Datos DESPUÉS de la transformación (Entrada final al modelo)")
-            st.caption(f"Esta es la matriz numérica (shape: {X_meta.shape}) que realmente recibe la red. Si esta matriz sigue siendo casi idéntica para diferentes imágenes, el problema es que la segmentación siempre falla.")
+            st.caption(f"Esta es la matriz numérica (shape: {X_meta.shape}) que realmente recibe la red. **Si esta matriz es siempre la misma para diferentes imágenes, has encontrado la causa del problema.**")
             X_meta_display = X_meta.toarray() if hasattr(X_meta, "toarray") else X_meta
             st.dataframe(pd.DataFrame(X_meta_display))
         
         # --- Predicción del modelo ---
         img_input_batch = np.expand_dims(img_for_model, axis=0)
-        
-        # La llamada a predict es correcta para un modelo híbrido con dos entradas
+        # Muchas arquitecturas híbridas esperan lista [img, meta], asegúrate de que tu modelo acepta esta entrada
         prediction = model.predict([img_input_batch, X_meta])
+        #prediction = model.predict(img_input_batch)
         
         with st.container():
             st.header("📊 Resultado Final")
@@ -466,3 +460,6 @@ if tile is not None and submit_button:
 else:
     with col2:
         st.info("Sube una imagen y rellena el formulario para ver la predicción.")
+
+st.markdown("---")
+st.caption("Aplicación para TFG. Versión con herramientas de diagnóstico.")
