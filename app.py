@@ -158,7 +158,7 @@ def load_all_resources():
     label_encoder = joblib.load("labelencoder_classDEF.pkl")
     
     model = load_model(
-        "modelo_hibrido_entrenadoCW.h5",
+        "modelo_hibrido_entrenadoCW.keras",
         #custom_objects={'CategoricalFocalCrossentropy': CategoricalFocalCrossentropy},
         compile=False  # Para predicción no es necesario recompilar
     )
