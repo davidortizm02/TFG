@@ -7,21 +7,12 @@ from tensorflow.keras.models import load_model
 import tensorflow as tf
 from skimage.feature import graycomatrix, graycoprops, local_binary_pattern
 from skimage.morphology import closing, opening, disk
-from skimage.measure import label, regionprops
 import joblib
 import json
 import keras
-# =====================
-# Constantes de segmentación
-# =====================
-# Ajusta estos valores según tu caso: radios de apertura/cierre y área mínima de lesión
-MORPH_OPEN_RADIUS = 5
-MORPH_CLOSE_RADIUS = 5
-MIN_LESION_AREA    = 100  # en píxeles; descarta regiones muy pequeñas
 
 # ====================================================================
 # Implementación de Focal Loss (si es necesaria para cargar el modelo)
-# Aunque compile=False, es buena práctica tenerla por si acaso.
 # ====================================================================
 class CategoricalFocalCrossentropy(tf.keras.losses.Loss):
     def __init__(self, gamma=0.5, alpha=None, from_logits=False, **kwargs):
@@ -55,203 +46,156 @@ class CategoricalFocalCrossentropy(tf.keras.losses.Loss):
         return config
 
 # =====================
-# Parámetros para extracción de características (GLCM, LBP)
+# Parámetros para extracción de características (GLCM, LBP) - Basados en tu script
 # =====================
 GLCM_DISTANCES = [1, 2, 4]
 GLCM_ANGLES    = [0, np.pi/4, np.pi/2, 3*np.pi/4]
-GLCM_LEVELS    = 8
+GLCM_LEVELS    = 8  # cuantización a 8 niveles
 LBP_RADIUS     = 1
 LBP_POINTS     = 8 * LBP_RADIUS
 
-# =====================
-# Funciones de extracción de características
-# =====================
+# =======================================================================
+# NUEVAS FUNCIONES DE EXTRACCIÓN DE CARACTERÍSTICAS (PROPORCIONADAS POR TI)
+# =======================================================================
+
 def segment_lesion(gray_img):
     """
-    Segmenta la lesión mediante Otsu + apertura/cierre + selección de la CC más grande.
-    Devuelve máscara binaria uint8 con valores 0 o 255.
-    gray_img: array 2D uint8.
+    Segmenta la lesión mediante Otsu + operaciones morfológicas.
+    Devuelve máscara binaria (255=lesión).
     """
-    # 1) Otsu con desenfoque
     blur = cv2.GaussianBlur(gray_img, (5,5), 0)
     _, mask = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    # Invertir si detecta fondo como lesión
+    if np.any(mask == 255) and np.any(mask == 0): # Evitar error si la máscara es toda blanca o negra
+      if gray_img[mask == 255].mean() < gray_img[mask == 0].mean():
+          mask = cv2.bitwise_not(mask)
+    # Limpieza morfológica
+    # Nota: se convierten a bool para skimage y de vuelta a uint8 para opencv
+    mask = closing(mask.astype(bool), disk(5)).astype(np.uint8) * 255
+    mask = opening(mask.astype(bool), disk(3)).astype(np.uint8) * 255
+    return mask
 
-    # 2) Invertir si fuese necesario: comparamos medias, solo si hay suficientes pixeles en fg/bg
-    fg = gray_img[mask == 255]
-    bg = gray_img[mask == 0]
-    if fg.size > 0 and bg.size > 0:
-        # Si la media de la región binarizada (fg) es menor que la del fondo, invertimos:
-        if fg.mean() < bg.mean():
-            mask = cv2.bitwise_not(mask)
-
-    # 3) Convertir a booleano y aplicar apertura (opening) y cierre (closing)
-    mask_bool = mask > 0
-    mask_bool = opening(mask_bool, disk(MORPH_OPEN_RADIUS))
-    mask_bool = closing(mask_bool, disk(MORPH_CLOSE_RADIUS))
-
-    # 4) Seleccionar la CC más grande
-    labels = label(mask_bool)
-    if labels.max() == 0:
-        # No hay regiones
-        return np.zeros_like(mask, dtype=np.uint8)
-    regions = regionprops(labels)
-    max_region = max(regions, key=lambda r: r.area)
-    if max_region.area < MIN_LESION_AREA:
-        # Región demasiado pequeña: descartamos
-        return np.zeros_like(mask, dtype=np.uint8)
-    # Máscara solo de la región más grande
-    mask_out = (labels == max_region.label).astype(np.uint8) * 255
-    return mask_out
 
 def compute_glcm_features(gray_roi, mask_roi):
     """
     Calcula propiedades GLCM multi-distancia y multi-ángulo sobre ROI enmascarado.
-    gray_roi: ROI recortado de la imagen en gris.
-    mask_roi: correspondiente máscara (0 o 255) del mismo tamaño que gray_roi.
-    Devuelve diccionario con keys: glcm_contrast, glcm_dissimilarity, etc.
-    Si roi demasiado pequeño o error, devuelve NaNs en los props.
     """
-    ys, xs = np.where(mask_roi == 255)
-    if ys.size == 0:
-        return {f'glcm_{prop}': np.nan for prop in ['contrast','dissimilarity','homogeneity','energy','ASM','correlation']}
-
-    # Cuantización a GLCM_LEVELS niveles: cuidado con división
-    bins = 256 // GLCM_LEVELS
-    if bins < 1:
-        bins = 1
-    quant = (gray_roi // bins).astype(np.uint8)
-    # Forzar background=0
+    # Cuantización
+    quant = (gray_roi // (256 // GLCM_LEVELS)).astype(np.uint8)
+    # Asegurar que background se ignora
     quant[mask_roi == 0] = 0
 
-    try:
-        glcm = graycomatrix(
-            quant,
-            distances=GLCM_DISTANCES,
-            angles=GLCM_ANGLES,
-            levels=GLCM_LEVELS,
-            symmetric=True,
-            normed=True
-        )
-    except Exception:
-        return {f'glcm_{prop}': np.nan for prop in ['contrast','dissimilarity','homogeneity','energy','ASM','correlation']}
-
+    glcm = graycomatrix(
+        quant,
+        distances=GLCM_DISTANCES,
+        angles=GLCM_ANGLES,
+        levels=GLCM_LEVELS,
+        symmetric=True,
+        normed=True
+    )
     feats = {}
     props = ['contrast', 'dissimilarity', 'homogeneity', 'energy', 'ASM', 'correlation']
     for prop in props:
-        try:
-            vals = graycoprops(glcm, prop=prop)
-            feats[f'glcm_{prop}'] = float(vals.mean())
-        except Exception:
-            feats[f'glcm_{prop}'] = np.nan
+        vals = graycoprops(glcm, prop=prop)
+        feats[f'glcm_{prop}'] = vals.mean()
     return feats
+
 
 def compute_lbp_features(gray_roi, mask_roi):
     """
-    Calcula histograma LBP (método 'uniform') dentro de la ROI enmascarada.
-    gray_roi: ROI en escala de grises.
-    mask_roi: máscara 0/255 del mismo tamaño.
-    Devuelve dict con claves 'lbp_0', 'lbp_1', ..., hasta n_bins-1.
+    Calcula histogram LBP uniform patterns dentro de la ROI.
     """
-    ys, xs = np.where(mask_roi == 255)
-    if ys.size == 0:
-        return {}
     lbp = local_binary_pattern(gray_roi, LBP_POINTS, LBP_RADIUS, method='uniform')
-    masked = lbp[mask_roi == 255].ravel()
-    if masked.size == 0:
-        return {}
+    lbp_masked = lbp[mask_roi == 255].ravel()
+    
+    if lbp_masked.size == 0:
+        return {} # Devuelve vacío si no hay pixeles en la máscara
+
     n_bins = int(lbp.max() + 1)
-    hist, _ = np.histogram(masked, bins=n_bins, range=(0, n_bins), density=True)
-    return {f'lbp_{i}': float(hist[i]) for i in range(n_bins)}
+    hist, _ = np.histogram(lbp_masked, bins=n_bins, range=(0, n_bins), density=True)
+    # Se retornan los primeros n_bins-1 bins (omitir último si es ruido)
+    return {f'lbp_{i}': hist[i] for i in range(n_bins-1)}
+
 
 def extract_features_from_array(img_rgb_uint8, gray_uint8, feature_columns):
     """
-    Extrae features para una sola imagen dada como arrays:
+    Extrae features para una sola imagen dada como arrays, usando la lógica de tu script.
     - img_rgb_uint8: imagen RGB uint8 (shape HxWx3).
-    - gray_uint8: imagen en gris uint8 (shape HxW), normalmente derivada de img_rgb.
+    - gray_uint8: imagen en gris uint8 (shape HxW).
     - feature_columns: lista de nombres de columnas esperadas en el pipeline.
     Retorna:
-      feats_aligned: dict con todas las columnas de feature_columns, rellenando con np.nan cuando no exista.
-      segmentation_mask: máscara binaria 2D uint8 (0 o 255) del mismo tamaño que gray_uint8.
+      feats_aligned: dict con todas las columnas, rellenando con np.nan si no se encuentra.
+      segmentation_mask: máscara binaria 2D uint8 (0 o 255).
     """
     feats = {}
-    # 1) Segmentar lesión
-    mask = segment_lesion(gray_uint8)  # máscara 0/255, 2D
-    # Si no se segmenta nada, devolvemos todos NaN
-    ys_all = np.where(mask == 255)[0]
-    if ys_all.size == 0:
-        # Retornar diccionario con sólo NaNs para cada feature column (excepto no incluimos 'image' aquí)
-        feats_aligned = {col: np.nan for col in feature_columns}
-        return feats_aligned, mask
 
-    # 2) Encontrar contorno principal de la máscara final
+    # 1) Segmentar lesión (usando tu nueva función)
+    mask = segment_lesion(gray_uint8)
     contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    
     if not contours:
+        # Si no hay contornos, devuelve NaNs y una máscara negra.
         feats_aligned = {col: np.nan for col in feature_columns}
-        return feats_aligned, mask
+        return feats_aligned, np.zeros_like(mask)
+
     c = max(contours, key=cv2.contourArea)
     lesion_mask = np.zeros_like(mask)
     cv2.drawContours(lesion_mask, [c], -1, 255, -1)
 
-    # 3) Estadísticos de color en RGB dentro de la lesión
-    ys, xs = np.where(lesion_mask == 255)
-    if ys.size > 0:
-        pix_R = img_rgb_uint8[:,:,0][lesion_mask==255].astype(float)
-        pix_G = img_rgb_uint8[:,:,1][lesion_mask==255].astype(float)
-        pix_B = img_rgb_uint8[:,:,2][lesion_mask==255].astype(float)
-        feats['mean_R'] = float(pix_R.mean())
-        feats['std_R']  = float(pix_R.std())
-        feats['mean_G'] = float(pix_G.mean())
-        feats['std_G']  = float(pix_G.std())
-        feats['mean_B'] = float(pix_B.mean())
-        feats['std_B']  = float(pix_B.std())
-    else:
-        feats['mean_R'] = feats['std_R'] = np.nan
-        feats['mean_G'] = feats['std_G'] = np.nan
-        feats['mean_B'] = feats['std_B'] = np.nan
+    # 2) Estadísticos de color en RGB
+    for i, col in enumerate(['R','G','B']):
+        pix = img_rgb_uint8[:,:,i][lesion_mask==255].astype(float)
+        feats[f'mean_{col}'] = pix.mean() if pix.size else np.nan
+        feats[f'std_{col}']  = pix.std()  if pix.size else np.nan
 
-    # 4) Métricas de forma basadas en el contorno c
+    # 3) Métricas de forma
     area = cv2.contourArea(c)
     peri = cv2.arcLength(c, True)
-    x, y, w, h = cv2.boundingRect(c)
-    rect_area = w * h
+    x,y,w,h = cv2.boundingRect(c)
+    rect_area = w*h
     hull = cv2.convexHull(c)
     hull_area = cv2.contourArea(hull)
-    solidity = float(area / hull_area) if hull_area > 0 else np.nan
-    extent = float(area / rect_area) if rect_area > 0 else np.nan
-
+    
     feats.update({
         'lesion_area': float(area),
         'lesion_perimeter': float(peri),
-        'bbox_x': int(x),
-        'bbox_y': int(y),
-        'bbox_width': int(w),
-        'bbox_height': int(h),
         'bbox_area': float(rect_area),
-        'solidity': solidity,
-        'extent': extent,
+        'solidity': float(area/hull_area) if hull_area > 0 else np.nan,
+        'extent': float(area/rect_area) if rect_area > 0 else np.nan,
     })
 
-    # 5) GLCM y LBP en ROI recortado al bounding box
-    gray_roi = gray_uint8[y:y+h, x:x+w]
-    mask_roi = lesion_mask[y:y+h, x:x+w]
+    # 4) GLCM y LBP en ROI recortado
+    # Solo proceder si el ROI tiene tamaño
+    if w > 0 and h > 0:
+        roi_gray = gray_uint8[y:y+h, x:x+w]
+        mask_roi = lesion_mask[y:y+h, x:x+w]
+        
+        # GLCM
+        try:
+            feats.update(compute_glcm_features(roi_gray, mask_roi))
+        except Exception as e:
+            print(f"Error en GLCM: {e}")
+            # Rellenar con NaN si falla
+            props = ['contrast', 'dissimilarity', 'homogeneity', 'energy', 'ASM', 'correlation']
+            for prop in props: feats[f'glcm_{prop}'] = np.nan
 
-    # GLCM
-    glcm_feats = compute_glcm_features(gray_roi, mask_roi)
-    feats.update(glcm_feats)
-    # LBP
-    lbp_feats = compute_lbp_features(gray_roi, mask_roi)
-    feats.update(lbp_feats)
+        # LBP
+        try:
+            feats.update(compute_lbp_features(roi_gray, mask_roi))
+        except Exception as e:
+            print(f"Error en LBP: {e}")
+            # No es necesario rellenar LBP con NaN, el alineado lo hará
 
-    # 6) Alineamos al listado feature_columns: si falta, np.nan; si hay en feats que no esté en feature_columns, lo ignoramos.
+    # 5) Alineamos al listado feature_columns: si falta, np.nan
     feats_aligned = {}
     for col in feature_columns:
         feats_aligned[col] = feats.get(col, np.nan)
-    return feats_aligned, mask
+        
+    return feats_aligned, lesion_mask
 
 # =====================
 # Carga de recursos (cacheado)
 # =====================
-
 @st.cache_resource
 def load_all_resources():
     """Carga todos los modelos y preprocesadores de una vez."""
@@ -260,17 +204,15 @@ def load_all_resources():
     
     preprocessor = joblib.load("preprocessor_metadataDEF.pkl")
     label_encoder = joblib.load("labelencoder_classDEF.pkl")
-    #keras.config.enable_unsafe_deserialization()
-
+    
     model = load_model(
-        "modelo_hibrido_entrenadoCW.keras",
-        #custom_objects={'CategoricalFocalCrossentropy': CategoricalFocalCrossentropy},
+        "modelo_hibrido_entrenado.h5",
         compile=False  # Para predicción no es necesario recompilar
     )
     return feature_columns, preprocessor, label_encoder, model
 
 # =====================
-# Funciones de preprocesamiento de imagen
+# Funciones de preprocesamiento de imagen para el modelo
 # =====================
 def center_crop_to_square(img):
     h, w = img.shape[:2]
@@ -303,7 +245,6 @@ def preprocess_image_for_model(image_file):
     cropped = crop_non_black_region(img_cv2)
     resized = crop_and_resize(cropped, target_size=224)
     
-    # La imagen final para el modelo es RGB y normalizada
     processed_rgb = cv2.cvtColor(resized, cv2.COLOR_BGR2RGB)
     return processed_rgb.astype('float32') / 255.0
 
@@ -318,7 +259,7 @@ st.markdown("Sube una imagen de una lesión y completa los metadatos para predec
 try:
     feature_columns, preprocessor, le_class, model = load_all_resources()
 except FileNotFoundError as e:
-    st.error(f"Error al cargar un archivo necesario: {e}. Asegúrate de que `feature_columns.json`, `preprocessor_metadata.pkl`, `labelencoder_class.pkl` y `modelo_hibrido_entrenado.h5` están en la misma carpeta que la app.")
+    st.error(f"Error al cargar un archivo necesario: {e}. Asegúrate de que `feature_columns.json`, `preprocessor_metadata.pkl`, `labelencoder_class.pkl` y `modelo_hibrido_entrenadoCW.keras` están en la misma carpeta que la app.")
     st.stop()
 
 # --- Layout de la App ---
@@ -348,7 +289,7 @@ if tile is not None and submit_button:
         st.header("3. Análisis y Predicción")
         
         # --- Preprocesamiento de la imagen ---
-        img_for_model = preprocess_image_for_model(tile)  # float32 [0,1], shape (224,224,3)
+        img_for_model = preprocess_image_for_model(tile)
         img_for_features = (img_for_model * 255).astype(np.uint8)
         gray_for_features = cv2.cvtColor(img_for_features, cv2.COLOR_RGB2GRAY)
         
@@ -360,12 +301,9 @@ if tile is not None and submit_button:
             
             c1, c2 = st.columns(2)
             c1.image(img_for_model, caption="Imagen Procesada (224x224)", use_container_width=True)
-            # Mostrar la máscara en escala de grises: se puede normalizar para mostrar
-            # convertimos a 3 canales para mejor visualización si se quiere, pero st.image muestra bien 2D.
             c2.image(segmentation_mask, caption="Máscara de Lesión Segmentada", use_container_width=True)
             st.caption("Si la máscara es negra o no resalta la lesión, las características serán incorrectas (NaNs) y el modelo dependerá solo de los metadatos.")
 
-            # Verificar si todas las características son NaN
             if all(pd.isna(v) for v in feats_raw.values()):
                 st.warning("No se detectó ninguna lesión. Todas las características de la imagen son NaN y serán imputadas por el preprocesador.")
             
@@ -402,15 +340,13 @@ if tile is not None and submit_button:
             st.dataframe(df_meta_input)
 
             st.subheader("Datos DESPUÉS de la transformación (Entrada final al modelo)")
-            st.caption(f"Esta es la matriz numérica (shape: {X_meta.shape}) que realmente recibe la red. **Si esta matriz es siempre la misma para diferentes imágenes, has encontrado la causa del problema.**")
+            st.caption(f"Esta es la matriz numérica (shape: {X_meta.shape}) que realmente recibe la red.")
             X_meta_display = X_meta.toarray() if hasattr(X_meta, "toarray") else X_meta
             st.dataframe(pd.DataFrame(X_meta_display))
         
         # --- Predicción del modelo ---
         img_input_batch = np.expand_dims(img_for_model, axis=0)
-        # Muchas arquitecturas híbridas esperan lista [img, meta], asegúrate de que tu modelo acepta esta entrada
         prediction = model.predict([img_input_batch, X_meta])
-        #prediction = model.predict(img_input_batch)
         
         with st.container():
             st.header("📊 Resultado Final")
