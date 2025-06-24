@@ -274,5 +274,47 @@ else:
     with col2:
         st.info("Sube una imagen y completa el formulario para predecir.")
 
+
+        # ——————————————————————————————
+        # Transformar metadatos y forzar vector a ceros (para test)
+        # ——————————————————————————————
+        try:
+            X_meta = preprocessor.transform(df_meta)
+        except Exception as e:
+            st.error(f"Error en preprocesado: {e}")
+            st.stop()
+
+        # Convertimos a array denso si es necesario
+        if hasattr(X_meta, "toarray"):
+            arr_meta = X_meta.toarray()
+        else:
+            arr_meta = X_meta.copy()
+
+        # Sobrescribir todo a ceros
+        arr_zero = np.zeros_like(arr_meta, dtype=arr_meta.dtype)
+        X_meta = arr_zero  # ahora el vector de metadatos es todo ceros
+
+        with st.expander("🔬 Diagnóstico: Preprocesamiento Metadatos", expanded=True):
+            st.subheader("Antes de transformar")
+            st.dataframe(df_meta.fillna("NaN"))
+            st.subheader("Después de transformar (ahora ceros)")
+            st.dataframe(pd.DataFrame(arr_zero))
+
+        # ——————————————————————————————
+        # Predicción con vector de metadatos cero
+        # ——————————————————————————————
+        pred_img = np.expand_dims(img_model, axis=0)
+        pred = model.predict([pred_img, X_meta], verbose=0)
+        idx  = np.argmax(pred, axis=1)[0]
+        conf = float(np.max(pred))
+        label = le_class.inverse_transform([idx])[0]
+
+        st.success(f"**Clase:** {label}  |  **Confianza:** {conf:.2%}")
+        dfp = pd.DataFrame({
+            "Clase":          le_class.classes_,
+            "Probabilidad":   pred.flatten()
+        }).set_index("Clase").sort_values("Probabilidad", ascending=False)
+        st.bar_chart(dfp)
+
 st.markdown("---")
 st.caption("TFG – Clasificador híbrido con diagnóstico de características.")
