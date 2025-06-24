@@ -72,28 +72,25 @@ def preprocess_image(image_file, size=224):
 # =====================
 st.title("🧠 Clasificador de Lesiones (Sólo Imagen)")
 st.markdown("Sube una imagen de una lesión para predecir su clase usando únicamente la imagen.")
-
 uploaded = st.file_uploader("Selecciona un JPG/PNG", type=["jpg","jpeg","png"])
 if uploaded:
     img_input = preprocess_image(uploaded)
 
     st.image(img_input, caption="Imagen 224×224", use_container_width=True)
     img_array = image.img_to_array(img_input)
-    img_array = np.expand_dims(img_array, axis=0)
-    img_array = preprocess_input(img_array)  # Dependiendo del modelo, a veces puedes omitir esto
-    # Predicción
-    batch = np.expand_dims(img_array, axis=0)
-    #st.image(batch, caption="Antes de predecir", use_container_width=True)
+    img_array = preprocess_input(img_array)
+    batch = np.expand_dims(img_array, axis=0)  # CORRECTO
+
     preds = model.predict(batch, verbose=0)
     st.info(preds)
     idx = int(np.argmax(preds))
     label = class_names[idx]
-    conf = float(preds[idx])
+    conf = float(preds[0][idx])  # Acceder correctamente
 
     st.success(f"**Clase predicha:** {label}  |  **Confianza:** {conf:.2%}")
 
     # Gráfico de probabilidades
-    dfp = {class_names[i]: float(preds[i]) for i in range(len(class_names))}
+    dfp = {class_names[i]: float(preds[0][i]) for i in range(len(class_names))}
     st.bar_chart(dfp)
 else:
     st.info("Sube una imagen para comenzar la predicción.")
