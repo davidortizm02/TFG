@@ -263,7 +263,7 @@ def load_all_resources():
     keras.config.enable_unsafe_deserialization()
 
     model = load_model(
-        "modelo_imagenes_entrenado.keras",
+        "modelo_hibrido_entrenado.h5",
         custom_objects={'CategoricalFocalCrossentropy': CategoricalFocalCrossentropy},
         compile=False  # Para predicción no es necesario recompilar
     )
@@ -409,8 +409,8 @@ if tile is not None and submit_button:
         # --- Predicción del modelo ---
         img_input_batch = np.expand_dims(img_for_model, axis=0)
         # Muchas arquitecturas híbridas esperan lista [img, meta], asegúrate de que tu modelo acepta esta entrada
-        #prediction = model.predict([img_input_batch, X_meta])
-        prediction = model.predict(img_input_batch)
+        prediction = model.predict([img_input_batch, X_meta])
+        #prediction = model.predict(img_input_batch)
         
         with st.container():
             st.header("📊 Resultado Final")
