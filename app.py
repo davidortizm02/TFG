@@ -370,7 +370,7 @@ if tile is not None and submit_button:
                 st.warning("No se detectó ninguna lesión. Todas las características de la imagen son NaN y serán imputadas por el preprocesador.")
             
             st.subheader("Características numéricas extraídas (raw)")
-            st.dataframe(pd.DataFrame([feats_raw]))
+            #st.dataframe(pd.DataFrame([feats_raw]))
             
         # --- Preparación de metadatos ---
         if edad <= 35:
