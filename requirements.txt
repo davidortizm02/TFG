@@ -11,12 +11,14 @@ numpy>=1.22,<1.24
 
 # Machine Learning / Deep Learning
 tensorflow==2.17.1
-keras==3.5.0 
+keras==3.5.0
+scikit-learn>=1.2.2
 
-scikit-learn>=1.2.2  
+# Visualización
+matplotlib>=3.5.0
+
 # Utilidades
 tqdm>=4.66.0
-
 dill>=0.3.6
 
 
