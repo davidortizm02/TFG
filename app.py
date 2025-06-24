@@ -258,12 +258,12 @@ def load_all_resources():
     with open("feature_columns.json", "r") as f:
         feature_columns = json.load(f)
     
-    preprocessor = joblib.load("preprocessor_metadata.pkl")
+    preprocessor = joblib.load("preprocessor_metadata52.pkl")
     label_encoder = joblib.load("labelencoder_class.pkl")
     keras.config.enable_unsafe_deserialization()
 
     model = load_model(
-        "modelo_hibrido_entrenadoSINEXTRACCION.h5",
+        "modelo_hibrido_entrenado.h5",
         custom_objects={'CategoricalFocalCrossentropy': CategoricalFocalCrossentropy},
         compile=False  # Para predicción no es necesario recompilar
     )
@@ -370,7 +370,7 @@ if tile is not None and submit_button:
                 st.warning("No se detectó ninguna lesión. Todas las características de la imagen son NaN y serán imputadas por el preprocesador.")
             
             st.subheader("Características numéricas extraídas (raw)")
-            #st.dataframe(pd.DataFrame([feats_raw]))
+            st.dataframe(pd.DataFrame([feats_raw]))
             
         # --- Preparación de metadatos ---
         if edad <= 35:
@@ -385,8 +385,8 @@ if tile is not None and submit_button:
             "sex": sexo,
             "anatom_site_general": site,
             "dataset": dataset,
-            "age_sex_interaction": f"{sexo}_{age_group}"
-            #**#feats_raw
+            "age_sex_interaction": f"{sexo}_{age_group}",
+            **feats_raw
         }])
         
         # --- Preprocesamiento de metadatos ---
