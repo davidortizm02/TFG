@@ -214,6 +214,7 @@ with col1:
             "HAM_rosendahl","MSK4nan","HAM_vienna_dias"
         ])
         submit_button = st.form_submit_button("Realizar Predicción")
+
 if tile and submit_button:
     with col2:
         st.header("3. Análisis y Predicción")
@@ -229,12 +230,9 @@ if tile and submit_button:
             st.dataframe(pd.DataFrame([feats_raw]).fillna("NaN"))
 
         # Codificar age_group
-        if edad <= 35:
-            grp = "young"
-        elif edad <= 65:
-            grp = "adult"
-        else:
-            grp = "senior"
+        if edad<=35: grp="young"
+        elif edad<=65: grp="adult"
+        else: grp="senior"
 
         df_meta = pd.DataFrame([{
             "age_approx": edad,
@@ -245,30 +243,21 @@ if tile and submit_button:
             **feats_raw
         }])
 
-        # Transformar metadatos y forzar vector a ceros (para test)
+        # Transformar metadatos
         try:
             X_meta = preprocessor.transform(df_meta)
         except Exception as e:
             st.error(f"Error en preprocesado: {e}")
             st.stop()
 
-        # Convertimos a array denso si es necesario
-        if hasattr(X_meta, "toarray"):
-            arr_meta = X_meta.toarray()
-        else:
-            arr_meta = X_meta.copy()
-
-        # Sobrescribir todo a ceros
-        arr_zero = np.zeros_like(arr_meta, dtype=arr_meta.dtype)
-        X_meta = arr_zero  # ahora el vector de metadatos es todo ceros
-
         with st.expander("🔬 Diagnóstico: Preprocesamiento Metadatos", expanded=True):
             st.subheader("Antes de transformar")
             st.dataframe(df_meta.fillna("NaN"))
-            st.subheader("Después de transformar (vector a ceros)")
-            st.dataframe(pd.DataFrame(arr_zero))
+            st.subheader("Después de transformar")
+            arr = X_meta.toarray() if hasattr(X_meta,"toarray") else X_meta
+            st.dataframe(pd.DataFrame(arr))
 
-        # Predicción con vector de metadatos cero
+        # Predicción
         pred_img = np.expand_dims(img_model, axis=0)
         pred = model.predict([pred_img, X_meta], verbose=0)
         idx = np.argmax(pred, axis=1)[0]
@@ -284,6 +273,8 @@ if tile and submit_button:
 else:
     with col2:
         st.info("Sube una imagen y completa el formulario para predecir.")
+
+
 
 st.markdown("---")
 st.caption("TFG – Clasificador híbrido con diagnóstico de características.")
