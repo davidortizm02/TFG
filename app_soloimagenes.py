@@ -19,7 +19,7 @@ def load_model_and_labels():
     """
     Carga el modelo entrenado únicamente con imagen y devuelve el modelo y las etiquetas.
     """
-    model = load_model("/kaggle/input/model_images/keras/default/1/modelo_imagenes_entrenado2.keras", compile=False)
+    model = load_model("modelo_imagenes_entrenado2.keras", compile=False)
     class_names = ["MEL", "NV", "BCC", "AK", "BKL", "DF", "VASC", "SCC"]
     return model, class_names
 
