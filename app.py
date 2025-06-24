@@ -5,6 +5,7 @@ import cv2
 import pandas as pd
 from PIL import Image
 from tensorflow.keras.models import load_model
+from tensorflow.keras.applications.efficientnet_v2 import preprocess_input as effnet_preprocess
 import tensorflow as tf
 import joblib
 import json
@@ -45,7 +46,6 @@ def load_all_resources():
         feature_columns = json.load(f)
     preprocessor = joblib.load("preprocessor_metadata.pkl")
     label_encoder = joblib.load("labelencoder_class.pkl")
-    # Asegúrate de que el nombre coincide con tu archivo real
     model = load_model("modelo_hibrido_entrenadoCW.keras", compile=False)
     return feature_columns, preprocessor, label_encoder, model
 
@@ -54,11 +54,9 @@ def load_all_resources():
 # =====================
 
 def segment_lesion(gray_img):
-    """Segmenta la lesión con Otsu + opening/closing + CC más grande."""
     blur = cv2.GaussianBlur(gray_img, (5,5), 0)
     _, mask = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-    fg = gray_img[mask == 255]
-    bg = gray_img[mask == 0]
+    fg, bg = gray_img[mask==255], gray_img[mask==0]
     if fg.size and bg.size and fg.mean() < bg.mean():
         mask = cv2.bitwise_not(mask)
     mask_bool = opening(mask>0, disk(MORPH_OPEN_RADIUS))
@@ -149,7 +147,6 @@ def extract_features_from_array(img_rgb, gray):
     feats.update(compute_lbp_features(gray_roi, mask_roi))
 
     return feats, mask
-
 # =====================
 # Funciones de preprocesamiento de la imagen para el modelo
 # =====================
@@ -158,30 +155,35 @@ def center_crop_to_square(img):
     h,w = img.shape[:2]
     if h==w: return img.copy()
     if h>w:
-        d=h-w; t=d//2
-        return img[t:t+w, :]
-    d=w-h; l=d//2
-    return img[:, l:l+h]
+        d,h_diff = h-w, (h-w)//2
+        return img[h_diff:h_diff+w, :]
+    d,w_diff = w-h, (w-h)//2
+    return img[:, w_diff:w_diff+h]
 
-def crop_and_resize(img, target_size=224):
-    sq = center_crop_to_square(img)
-    return cv2.resize(sq, (target_size,target_size), interpolation=cv2.INTER_AREA)
 
 def crop_non_black_region(img, thresh=10):
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     _, mask = cv2.threshold(gray, thresh, 255, cv2.THRESH_BINARY)
     ys,xs = np.where(mask)
-    if not ys.size: return img
+    if ys.size ==0: return img
     return img[ys.min():ys.max()+1, xs.min():xs.max()+1]
 
-def preprocess_image_for_model(image_file):
+
+def preprocess_image_for_model(image_file, target_size=224):
+    # Carga y conversión a BGR
     img = Image.open(image_file).convert('RGB')
     arr = np.array(img)
     bgr = cv2.cvtColor(arr, cv2.COLOR_RGB2BGR)
-    cropped = crop_non_black_region(bgr)
-    resized = crop_and_resize(cropped, 224)
+    # Elimina fondo negro y recorta al cuadrado
+    crop = crop_non_black_region(bgr, thresh=10)
+    square = center_crop_to_square(crop)
+    resized = cv2.resize(square, (target_size, target_size), interpolation=cv2.INTER_LINEAR)
+    # Convertir BGR a RGB para visualización
     rgb = cv2.cvtColor(resized, cv2.COLOR_BGR2RGB)
-    return rgb.astype('float32')/255.0
+    # Preprocesar para EfficientNetV2
+    img_array = np.expand_dims(rgb, axis=0).astype(np.float32)
+    img_array = effnet_preprocess(img_array)
+    return img_array, rgb.astype(np.uint8)
 
 # =====================
 # Interfaz de Streamlit
@@ -218,21 +220,22 @@ with col1:
 if tile and submit_button:
     with col2:
         st.header("3. Análisis y Predicción")
-        img_model = preprocess_image_for_model(tile)
-        img_uint8 = (img_model * 255).astype(np.uint8)
-        gray = cv2.cvtColor(img_uint8, cv2.COLOR_RGB2GRAY)
+        # Preprocesar imagen
+        img_batch, img_vis = preprocess_image_for_model(tile)
+        gray = cv2.cvtColor(img_vis, cv2.COLOR_RGB2GRAY)
 
-        feats_raw, mask = extract_features_from_array(img_uint8, gray)
+        # Extraer features de imagen
+        feats_raw, mask = extract_features_from_array(img_vis, gray)
 
         with st.expander("🔍 Diagnóstico: Segmentación y Features", expanded=True):
-            st.image(img_model, caption="Imagen 224×224", use_container_width=True)
+            st.image(img_vis, caption="Imagen 224×224", use_container_width=True)
             st.image(mask, caption="Máscara de lesión", use_container_width=True)
             st.dataframe(pd.DataFrame([feats_raw]).fillna("NaN"))
 
         # Codificar age_group
-        if edad<=35: grp="young"
-        elif edad<=65: grp="adult"
-        else: grp="senior"
+        if edad <= 35: grp = "young"
+        elif edad <= 65: grp = "adult"
+        else: grp = "senior"
 
         df_meta = pd.DataFrame([{
             "age_approx": edad,
@@ -254,13 +257,12 @@ if tile and submit_button:
             st.subheader("Antes de transformar")
             st.dataframe(df_meta.fillna("NaN"))
             st.subheader("Después de transformar")
-            arr = X_meta.toarray() if hasattr(X_meta,"toarray") else X_meta
+            arr = X_meta.toarray() if hasattr(X_meta, "toarray") else X_meta
             st.dataframe(pd.DataFrame(arr))
 
-        # Predicción
-        pred_img = np.expand_dims(img_model, axis=0)
-        pred = model.predict([pred_img, X_meta], verbose=0)
-        idx = np.argmax(pred, axis=1)[0]
+        # Predicción híbrida
+        pred = model.predict([img_batch, X_meta], verbose=0)
+        idx = int(np.argmax(pred, axis=1)[0])
         conf = float(np.max(pred))
         label = le_class.inverse_transform([idx])[0]
 
@@ -273,8 +275,6 @@ if tile and submit_button:
 else:
     with col2:
         st.info("Sube una imagen y completa el formulario para predecir.")
-
-
 
 st.markdown("---")
 st.caption("TFG – Clasificador híbrido con diagnóstico de características.")
