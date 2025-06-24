@@ -83,7 +83,7 @@ if uploaded:
     img_array = preprocess_input(img_array)  # Dependiendo del modelo, a veces puedes omitir esto
     # Predicción
     batch = np.expand_dims(img_array, axis=0)
-    st.image(batch, caption="Antes de predecir", use_container_width=True)
+    #st.image(batch, caption="Antes de predecir", use_container_width=True)
     preds = model.predict(batch, verbose=0)
     st.info(preds)
     idx = int(np.argmax(preds))
