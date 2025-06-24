@@ -58,43 +58,16 @@ LBP_POINTS     = 8 * LBP_RADIUS
 # Funciones de extracción de características
 # =====================
 def segment_lesion(gray_img):
-    """
-    Segmenta la lesión de forma robusta.
-    Usa Otsu como primer intento y un umbral adaptativo como fallback para evitar máscaras vacías.
-    """
-    # Estrategia 1: Umbralización de Otsu, un buen método general.
-    blur = cv2.GaussianBlur(gray_img, (5, 5), 0)
+    """Segmenta la lesión usando umbralización de Otsu y operaciones morfológicas."""
+    blur = cv2.GaussianBlur(gray_img, (5,5), 0)
     _, mask = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-
-    # --- CHEQUEO DE FALLO DE OTSU ---
-    # Si la máscara es casi toda de un solo color, Otsu probablemente ha fallado.
-    # Esto ocurre en imágenes de bajo contraste donde no hay una clara bimodalidad.
-    white_pixels = np.sum(mask == 255)
-    total_pixels = mask.size
-    white_ratio = white_pixels / total_pixels
-
-    # Si más del 99% o menos del 1% de los píxeles son blancos, consideramos que ha fallado.
-    if white_ratio > 0.99 or white_ratio < 0.01:
-        # --- ESTRATEGIA 2 (FALLBACK) ---
-        # Umbral adaptativo: bueno para condiciones de iluminación variables, pero puede generar ruido.
-        mask = cv2.adaptiveThreshold(blur, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-                                     cv2.THRESH_BINARY, 15, 4)
-        # El umbral adaptativo a menudo encuentra los bordes, resultando en un objeto negro
-        # sobre fondo blanco, así que lo invertimos para que la lesión sea blanca.
+    # Asegurarse de que la lesión sea blanca (el objeto de interés)
+    if gray_img[mask == 255].mean() < gray_img[mask == 0].mean():
         mask = cv2.bitwise_not(mask)
-    else:
-        # Si Otsu funcionó, nos aseguramos de que la lesión (el objeto de interés) sea blanca.
-        # Comparamos la intensidad media de la imagen original en las áreas de la máscara.
-        if gray_img[mask == 255].mean() < gray_img[mask == 0].mean():
-            mask = cv2.bitwise_not(mask)
-
-    # --- LIMPIEZA MORFOLÓGICA ---
-    # Se aplican operaciones para eliminar ruido y rellenar agujeros en la máscara final.
-    # Un 'closing' más agresivo para unir regiones separadas.
-    mask = closing(mask, disk(10)) 
-    # Un 'opening' para eliminar pequeños puntos de ruido que puedan haber quedado.
-    mask = opening(mask, disk(5))
-    
+     # operaciones morfológicas devuelven máscara booleana: reconvertimos a uint8 0/255
+    mask = closing(mask > 0, disk(5))
+    mask = opening(mask, disk(3))
+    mask = (mask.astype(np.uint8)) * 255
     return mask
 
 def compute_glcm_features(gray_roi, mask_roi):
@@ -120,17 +93,9 @@ def compute_lbp_features(gray_roi, mask_roi):
     """Calcula el histograma de Patrones Binarios Locales (LBP)."""
     lbp = local_binary_pattern(gray_roi, LBP_POINTS, LBP_RADIUS, method='uniform')
     lbp_masked = lbp[mask_roi == 255].ravel()
-    if lbp_masked.size == 0:
-        return {f'lbp_{i}': 0 for i in range(LBP_POINTS + 1)} # Devuelve ceros si no hay píxeles
     n_bins = int(lbp.max() + 1)
     hist, _ = np.histogram(lbp_masked, bins=n_bins, range=(0, n_bins), density=True)
-    
-    # Asegurar que el diccionario devuelto tenga siempre la misma longitud
-    lbp_feats = {f'lbp_{i}': 0 for i in range(LBP_POINTS + 1)}
-    for i in range(len(hist)):
-        lbp_feats[f'lbp_{i}'] = hist[i]
-    return lbp_feats
-
+    return {f'lbp_{i}': hist[i] for i in range(n_bins-1)}
 
 def extract_features_from_array(img_rgb, gray, feature_columns):
     """
@@ -144,35 +109,35 @@ def extract_features_from_array(img_rgb, gray, feature_columns):
 
     if contours:
         c = max(contours, key=cv2.contourArea)
-        # Chequeo adicional: ignorar contornos muy pequeños que son probablemente ruido
-        if cv2.contourArea(c) > 50:
-            cv2.drawContours(final_lesion_mask, [c], -1, 255, -1)
+        lesion_mask = np.zeros_like(mask)
+        cv2.drawContours(lesion_mask, [c], -1, 255, -1)
+        final_lesion_mask = lesion_mask
 
-            # Color stats
-            for i, col in enumerate(['R','G','B']):
-                pix = img_rgb[:,:,i][final_lesion_mask==255].astype(float)
-                feats[f'mean_{col}'] = pix.mean() if pix.size > 0 else np.nan
-                feats[f'std_{col}']  = pix.std()  if pix.size > 0 else np.nan
-            # Shape metrics
-            area = cv2.contourArea(c)
-            peri = cv2.arcLength(c, True)
-            x,y,w,h = cv2.boundingRect(c)
-            rect_area = w*h
-            hull = cv2.convexHull(c)
-            hull_area = cv2.contourArea(hull)
-            feats.update({
-                'lesion_area': area,
-                'lesion_perimeter': peri,
-                'bbox_area': rect_area,
-                'solidity': area/hull_area if hull_area>0 else np.nan,
-                'extent': area/rect_area if rect_area>0 else np.nan,
-            })
-            # ROI para GLCM y LBP
-            roi_gray = gray[y:y+h, x:x+w]
-            mask_roi = final_lesion_mask[y:y+h, x:x+w]
-            if roi_gray.size > 0 and mask_roi.any():
-                 feats.update(compute_glcm_features(roi_gray, mask_roi))
-                 feats.update(compute_lbp_features(roi_gray, mask_roi))
+        # Color stats
+        for i, col in enumerate(['R','G','B']):
+            pix = img_rgb[:,:,i][lesion_mask==255].astype(float)
+            feats[f'mean_{col}'] = pix.mean() if pix.size > 0 else np.nan
+            feats[f'std_{col}']  = pix.std()  if pix.size > 0 else np.nan
+        # Shape metrics
+        area = cv2.contourArea(c)
+        peri = cv2.arcLength(c, True)
+        x,y,w,h = cv2.boundingRect(c)
+        rect_area = w*h
+        hull = cv2.convexHull(c)
+        hull_area = cv2.contourArea(hull)
+        feats.update({
+            'lesion_area': area,
+            'lesion_perimeter': peri,
+            'bbox_area': rect_area,
+            'solidity': area/hull_area if hull_area>0 else np.nan,
+            'extent': area/rect_area if rect_area>0 else np.nan,
+        })
+        # ROI para GLCM y LBP
+        roi_gray = gray[y:y+h, x:x+w]
+        mask_roi = lesion_mask[y:y+h, x:x+w]
+        if roi_gray.size > 0 and mask_roi.any():
+             feats.update(compute_glcm_features(roi_gray, mask_roi))
+             feats.update(compute_lbp_features(roi_gray, mask_roi))
 
     # Construir dict completo con todas las columnas, rellenando NaN donde no haya valor
     full_feats = {col: np.nan for col in feature_columns}
