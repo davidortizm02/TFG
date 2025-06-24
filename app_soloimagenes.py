@@ -4,6 +4,8 @@ import cv2
 from PIL import Image
 from tensorflow.keras.preprocessing import image
 from tensorflow.keras.models import load_model
+from tensorflow.keras.preprocessing import image
+from tensorflow.keras.applications.imagenet_utils import decode_predictions, preprocess_input
 from skimage.feature import graycomatrix, graycoprops, local_binary_pattern
 from skimage.morphology import opening, closing, disk
 from skimage.measure import label, regionprops
@@ -76,11 +78,13 @@ if uploaded:
     img_input = preprocess_image(uploaded)
 
     st.image(img_input, caption="Imagen 224×224", use_container_width=True)
-    img_array = image.img_to_array(img_input)
+    img_array = image.img_to_array(img)
+    img_array = np.expand_dims(img_array, axis=0)
+    img_array = preprocess_input(img_array)  # Dependiendo del modelo, a veces puedes omitir esto
     # Predicción
     batch = np.expand_dims(img_array, axis=0)
     st.image(batch, caption="Antes de predecir", use_container_width=True)
-    preds = model.predict(batch, verbose=0)[0]
+    preds = model.predict(batch, verbose=0)
     st.info(preds)
     idx = int(np.argmax(preds))
     label = class_names[idx]
