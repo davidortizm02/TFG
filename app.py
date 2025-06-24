@@ -252,6 +252,7 @@ if tile is not None:
     img_input = np.expand_dims(proc_img, axis=0)
     
     st.image(proc_img, caption="Imagen procesada", use_container_width=True)
+    st.image(img_input, caption="Imagen para meterla en la red", use_container_width=True)
     # Extracción de características
     img_np = (proc_img * 255).astype(np.uint8)
     gray = cv2.cvtColor(img_np, cv2.COLOR_RGB2GRAY)
@@ -271,6 +272,8 @@ if tile is not None:
     # Transformar con pipeline
     try:
         X_meta = preprocessor.transform(df_meta_input)
+        st.subheader("📋 Metadata + Features (despues de transformación)")
+        st.write(X_meta.T)
     except Exception as e:
         st.error(f"Error en preprocesamiento de metadatos: {e}")
         st.stop()
