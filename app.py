@@ -373,36 +373,6 @@ if tile is not None and submit_button:
             st.dataframe(pd.DataFrame([feats_raw]))
             
         # --- Preparación de metadatos ---
- 
-
-# --- Procesamiento y Predicción ---
-if tile is not None and submit_button:
-    with col2:
-        st.header("3. Análisis y Predicción")
-        
-        # --- Preprocesamiento de la imagen ---
-        img_for_model = preprocess_image_for_model(tile)  # float32 [0,1], shape (224,224,3)
-        img_for_features = (img_for_model * 255).astype(np.uint8)
-        gray_for_features = cv2.cvtColor(img_for_features, cv2.COLOR_RGB2GRAY)
-        
-        # --- Extracción de características ---
-        feats_raw, segmentation_mask = extract_features_from_array(img_for_features, gray_for_features, feature_columns)
-        
-        with st.expander("🔍 Diagnóstico: Extracción de Características", expanded=True):
-            st.info("Aquí puedes ver el resultado de la segmentación de la lesión y las características numéricas extraídas de ella.")
-            
-            c1, c2 = st.columns(2)
-            c1.image(img_for_model, caption="Imagen Procesada (224x224)", use_container_width=True)
-            c2.image(segmentation_mask, caption="Máscara de Lesión Segmentada", use_container_width=True)
-            st.caption("Si la máscara es negra o no resalta la lesión, las características serán incorrectas (NaNs) y el modelo dependerá solo de los metadatos.")
-
-            if all(pd.isna(v) for v in feats_raw.values()):
-                st.warning("No se detectó ninguna lesión. Todas las características de la imagen son NaN y serán imputadas por el preprocesador a sus valores medios/medianos.")
-            
-            st.subheader("Características numéricas extraídas (raw)")
-            st.dataframe(pd.DataFrame([feats_raw]))
-            
-        # --- Preparación de metadatos ---
         if edad <= 35:
             age_group = "young"
         elif edad <= 65:
@@ -410,22 +380,15 @@ if tile is not None and submit_button:
         else:
             age_group = "senior"
         
-        # **==== INICIO DEL CÓDIGO CORREGIDO ====**
-
-        # 1. Recolectar todos los datos disponibles en un único diccionario.
-        input_data = {
+        df_meta_input = pd.DataFrame([{
             "age_approx": edad,
             "sex": sexo,
             "anatom_site_general": site,
             "dataset": dataset,
             "age_sex_interaction": f"{sexo}_{age_group}",
-            **feats_raw  # Añadir las características extraídas de la imagen
-        }
-
-        # 2. Crear un DataFrame de una sola fila, asegurando que las columnas coincidan
-        #    exactamente con las que el preprocesador fue entrenado (`feature_columns`).
-        #    Esto garantiza el orden y la presencia correctos de cada columna.
-        df_meta_input = pd.DataFrame([input_data], columns=feature_columns)
+            **feats_raw
+        }])
+        
         # --- Preprocesamiento de metadatos ---
         try:
             X_meta = preprocessor.transform(df_meta_input)
