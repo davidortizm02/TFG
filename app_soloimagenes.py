@@ -2,6 +2,7 @@ import streamlit as st
 import numpy as np
 import cv2
 from PIL import Image
+from tensorflow.keras.preprocessing import image
 from tensorflow.keras.models import load_model
 from skimage.feature import graycomatrix, graycoprops, local_binary_pattern
 from skimage.morphology import opening, closing, disk
@@ -73,13 +74,11 @@ st.markdown("Sube una imagen de una lesión para predecir su clase usando única
 uploaded = st.file_uploader("Selecciona un JPG/PNG", type=["jpg","jpeg","png"])
 if uploaded:
     img_input = preprocess_image(uploaded)
-    img_uint8 = (img_input * 255).astype(np.uint8)
-    gray = cv2.cvtColor(img_uint8, cv2.COLOR_RGB2GRAY)
 
     st.image(img_input, caption="Imagen 224×224", use_container_width=True)
-
+    img_array = image.img_to_array(img_input)
     # Predicción
-    batch = np.expand_dims(img_input, axis=0)
+    batch = np.expand_dims(img_array, axis=0)
     st.image(batch, caption="Antes de predecir", use_container_width=True)
     preds = model.predict(batch, verbose=0)[0]
     st.info(preds)
