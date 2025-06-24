@@ -78,7 +78,7 @@ if uploaded:
     img_input = preprocess_image(uploaded)
 
     st.image(img_input, caption="Imagen 224×224", use_container_width=True)
-    img_array = image.img_to_array(img)
+    img_array = image.img_to_array(img_input)
     img_array = np.expand_dims(img_array, axis=0)
     img_array = preprocess_input(img_array)  # Dependiendo del modelo, a veces puedes omitir esto
     # Predicción
