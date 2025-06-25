@@ -317,11 +317,11 @@ with tab_inicio:
                 
     **¿Cómo empezar?**
     1.  Ve a la pestaña **"🧪 Nueva Predicción"**.
-    2.  Sube una imagen, elige el modelo y completa los datos requeridos.
-    3.  Asigna un nombre único a tu predicción.
-    4.  Haz clic en "Realizar Predicción" y explora los resultados.
+    2.  Sube una imagen, elige el modelo que quieres utilizar para la predicción y completa los datos requeridos.
+    3.  Asigna un nombre a tu predicción para guardarla en el historial.
+    4.  Haz clic en "Realizar Predicción" y analiza los resultados.
     """)
-    st.warning("**Aviso Importante:** Esta es una herramienta experimental y **NO** un dispositivo de diagnóstico médico.")
+    st.warning("**Aviso Importante:** Esta herramienta es una TFG y **NO** debe ser utilizada para autodiagnóstico o como sustituto de una consulta médica profesional.")
 
 with tab_prediccion:
     col_config, col_display = st.columns([0.4, 0.6], gap="large")
@@ -335,7 +335,7 @@ with tab_prediccion:
             meta = {}
             if model_choice.startswith("Híbrido"):
                 st.markdown("##### Metadatos del Paciente")
-                meta['edad'] = st.slider("Edad:", 1, 100, 50)
+                meta['edad'] = st.text_input("Edad:", key="edad")
                 meta['sexo'] = st.selectbox("Sexo:", ["male", "female", "unknown"])
                 meta['zona'] = st.selectbox("Zona anatómica:", ["anterior torso","head/neck","lateral torso","lower extremity","upper extremity","oral/genital","palms/soles","posterior torso","unknown"])
                 meta['dataset'] = st.selectbox("Fuente del dataset:", ["BCN_nan","HAM_vidir_molemax","HAM_vidir_modern","HAM_rosendahl","MSK4nan","HAM_vienna_dias"])
@@ -415,4 +415,4 @@ with tab_info:
     **Skin-AI** es un proyecto demostrativo para mostrar las capacidades de los modelos de Deep Learning en dermatología computacional, utilizando modelos entrenados con Aprendizaje Federado.
     - **Tecnologías:** Python, TensorFlow/Keras, Scikit-learn, OpenCV, Streamlit.
     """)
-    st.warning("**Aviso Importante:** Esta herramienta es una prueba de concepto académica y **NO** debe ser utilizada para autodiagnóstico.")
+    st.warning("**Aviso Importante:** Esta herramienta es una TFG y **NO** debe ser utilizada para autodiagnóstico o como sustituto de una consulta médica profesional.")
