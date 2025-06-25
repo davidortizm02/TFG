@@ -213,7 +213,7 @@ st.set_page_config(
 local_css()
 
 # Sidebar: logo y historial
-st.sidebar.image("assets/logo.png", use_container_width=True)
+st.sidebar.image("assets/logo.png", width=50)
 st.sidebar.title("Historial de Predicciones")
 if 'history' not in st.session_state:
     st.session_state.history = []
