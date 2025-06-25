@@ -189,8 +189,14 @@ def preprocess_image_for_model(image_file, target_size=224):
 # =====================
 # Interfaz de Streamlit
 # =====================
-st.title("🧠 Clasificador de Lesiones Cutáneas")
-st.markdown("Selecciona el modelo y sube la imagen para predecir el tipo de lesión.")
+
+
+# Configuración de página
+st.set_page_config(page_title="🧠 Clasificador de Lesiones Cutáneas", layout="wide", initial_sidebar_state="expanded")
+
+# Título principal
+st.markdown("# 🧠 Clasificador de Lesiones Cutáneas")
+st.markdown("---")
 
 # Cargar recursos
 try:
@@ -199,97 +205,100 @@ except FileNotFoundError as e:
     st.error(f"Falta un archivo necesario: {e}")
     st.stop()
 
-# Selección de modelo
-model_choice = st.radio("Elige el modelo", (
-    "Híbrido (imagen + metadatos)",
-    "Solo imagen"
-))
-
-col1, col2 = st.columns([1, 1])
-with col1:
-    st.header("1. Sube la Imagen")
-    uploaded = st.file_uploader("Selecciona un JPG/PNG", type=["jpg","jpeg","png"])
-
+# Sidebar para selección de modelo y metadatos
+with st.sidebar:
+    st.header("Ajustes de Predicción")
+    model_choice = st.radio("Modelo:", ("Híbrido (imagen + metadatos)", "Solo imagen"))
+    uploaded = st.file_uploader("Sube JPG/PNG:", type=["jpg","jpeg","png"])
     if model_choice == "Híbrido (imagen + metadatos)":
-        st.header("2. Introduce Metadatos")
-        with st.form(key="meta_form"):
-            edad = st.number_input("Edad aproximada", 0, 120, 50)
-            sexo = st.selectbox("Sexo", ["male","female","unknown"])
-            site = st.selectbox("Zona anatómica", [
-                "anterior torso","head/neck","lateral torso","lower extremity",
-                "upper extremity","oral/genital","palms/soles","posterior torso","unknown"
-            ])
-            dataset = st.selectbox("Fuente del dataset", [
-                "BCN_nan","HAM_vidir_molemax","HAM_vidir_modern",
-                "HAM_rosendahl","MSK4nan","HAM_vienna_dias"
-            ])
-            submit = st.form_submit_button("Realizar Predicción")
-    else:
-        submit = st.button("Realizar Predicción")
+        st.subheader("Metadatos del Paciente")
+        edad = st.slider("Edad aproximada:", 0, 120, 50)
+        sexo = st.selectbox("Sexo:", ["male","female","unknown"])
+        site = st.selectbox("Zona anatómica:", [
+            "anterior torso","head/neck","lateral torso","lower extremity",
+            "upper extremity","oral/genital","palms/soles","posterior torso","unknown"
+        ])
+        dataset = st.selectbox("Fuente del dataset:", [
+            "BCN_nan","HAM_vidir_molemax","HAM_vidir_modern",
+            "HAM_rosendahl","MSK4nan","HAM_vienna_dias"
+        ])
+    submitted = st.button("Realizar Predicción")
 
-if uploaded and submit:
-    with st.spinner('Procesando...'):
-        # Preprocesar imagen
+# Área principal
+def show_images(original, vis, mask=None):
+    """
+    Muestra imágenes en disposición responsiva.
+    """
+    if mask is not None:
+        cols = st.columns(3)
+        cols[0].image(original, caption="Original", use_column_width=True)
+        cols[1].image(vis, caption="Preprocesada", use_column_width=True)
+        cols[2].image(mask, caption="Máscara de lesión", use_column_width=True)
+    else:
+        cols = st.columns(2)
+        cols[0].image(original, caption="Original", use_column_width=True)
+        cols[1].image(vis, caption="Preprocesada (224×224)", use_column_width=True)
+
+if uploaded and submitted:
+    with st.spinner('Procesando predicción...'):
+        # Preprocesar
         img_batch, img_vis = preprocess_image_for_model(uploaded)
         original = Image.open(uploaded).convert('RGB')
 
-        # Mostrar imágenes pre y post
+        # Visualizar
         with st.expander("📷 Visualización de Imágenes", expanded=True):
-            if model_choice == "Híbrido (imagen + metadatos)":
-                cols = st.columns(3, gap='large')
-                cols[0].image(original, caption="Original", width=150)
-                cols[1].image(img_vis, caption="Preprocesada", width=150)
-                # extraer máscara para híbrido
-                gray = cv2.cvtColor(img_vis, cv2.COLOR_RGB2GRAY)
-                _, mask = extract_features_from_array(img_vis, gray)
-                cols[2].image(mask, caption="Máscara de lesión", width=150)
-                st.dataframe(pd.DataFrame([_]).fillna("NaN"))
+            if model_choice.startswith("Híbrido"):
+                gray = cv2.cvtColor(np.array(img_vis), cv2.COLOR_RGB2GRAY)
+                _, mask = extract_features_from_array(np.array(img_vis), gray)
+                show_images(original, img_vis, mask)
             else:
-                cols = st.columns([1,1], gap='small')
-                cols[0].image(original, caption="Original", width=300)
-                cols[1].image(img_vis, caption="Preprocesada 224×224", width=300)
+                show_images(original, img_vis)
 
-        # Procesar predicción
-        if model_choice == "Híbrido (imagen + metadatos)":
-            # reutilizamos gray y mask llamando a extract_features para features numéricas
-            feats_raw, mask = extract_features_from_array(img_vis, gray)
-            # Preparar DataFrame metadatos
-            if edad <= 35: grp = "young"
-            elif edad <= 65: grp = "adult"
-            else: grp = "senior"
-            df_meta = pd.DataFrame([{
+        # Preparar inputs
+        if model_choice.startswith("Híbrido"):
+            feats_raw, _ = extract_features_from_array(np.array(img_vis), gray)
+            # Categorizar edad
+            if edad <= 35:
+                grp = "young"
+            elif edad <= 65:
+                grp = "adult"
+            else:
+                grp = "senior"
+            df_meta = pd.DataFrame([{**{
                 "age_approx": edad,
                 "sex": sexo,
                 "anatom_site_general": site,
                 "dataset": dataset,
-                "age_sex_interaction": f"{sexo}_{grp}",
-                **feats_raw
-            }])
+                "age_sex_interaction": f"{sexo}_{grp}"
+            }, **feats_raw}])
             X_meta = preproc.transform(df_meta)
-            model = model_hybrid
             inputs = [img_batch, X_meta]
+            model = model_hybrid
         else:
-            model = model_img
             inputs = img_batch
+            model = model_img
 
+        # Predicción
         pred = model.predict(inputs, verbose=0)
         idx = int(np.argmax(pred, axis=1)[0])
         conf = float(np.max(pred))
         label = le_class.inverse_transform([idx])[0]
 
         # Mostrar resultados
-        with col2:
-            st.header("3. Resultado")
-            st.success(f"**Clase:** {label}  |  **Confianza:** {conf:.2%}")
+        st.markdown("---")
+        col_res1, col_res2 = st.columns([1, 2])
+        with col_res1:
+            st.metric(label="**Lesión Predicha**", value=label)
+            st.metric(label="**Confianza**", value=f"{conf:.2%}")
+        with col_res2:
             dfp = pd.DataFrame({
-                "Clase": le_class.classes_,
+                "Lesión": le_class.classes_,
                 "Probabilidad": pred.flatten()
-            }).set_index("Clase").sort_values("Probabilidad", ascending=False)
+            }).set_index("Lesión").sort_values("Probabilidad", ascending=False)
             st.bar_chart(dfp)
 
 else:
-    with col2:
-        st.info("Sube una imagen y selecciona opciones para predecir.")
+    st.info("Sube una imagen y configura la predicción desde la barra lateral.")
 
 st.markdown("---")
-st.caption("TFG – Clasificador de lesiones con selección de modelo y mejora de interfaz.")
+st.caption("TFG – Mejora visual y usabilidad de la interfaz Streamlit.")
