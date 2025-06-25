@@ -186,7 +186,6 @@ def preprocess_image_for_model(image_file, target_size=224):
 
 
 
-
 # =====================
 # Interfaz de Streamlit
 # =====================
@@ -232,6 +231,13 @@ if uploaded and submit:
     with st.spinner('Procesando...'):
         # Preprocesar imagen
         img_batch, img_vis = preprocess_image_for_model(uploaded)
+        # Mostrar original vs preprocesada
+        original = Image.open(uploaded).convert('RGB')
+        with st.expander("📷 Original vs Preprocesada", expanded=True):
+            c_o, c_p = st.columns(2)
+            c_o.image(original, caption="Original", width=200)
+            c_p.image(img_vis, caption="Preprocesada 224×224", width=200)
+
         # Si es híbrido, extraer features y metadatos
         if model_choice == "Híbrido (imagen + metadatos)":
             gray = cv2.cvtColor(img_vis, cv2.COLOR_RGB2GRAY)
@@ -239,9 +245,9 @@ if uploaded and submit:
 
             # Mostrar segmentación y features
             with st.expander("🔍 Segmentación y Features", expanded=True):
-                st.image(img_vis, caption="Imagen 224×224", use_container_width=True)
-                st.image(mask, caption="Máscara de lesión", use_container_width=True)
                 st.dataframe(pd.DataFrame([feats_raw]).fillna("NaN"))
+                # Mostrar máscara más pequeña
+                st.image(mask, caption="Máscara de lesión", width=200)
 
             # Preparar DataFrame metadatos
             if edad <= 35: grp = "young"
