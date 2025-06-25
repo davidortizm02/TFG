@@ -342,7 +342,7 @@ with tab_prediccion:
             
             # CAMBIO: Se usa un `key` para vincular el input al estado de la sesión.
             
-            pred_nameRES = st.text_input("Nombre para este registro:", key="pred_name")
+            st.text_input("Nombre para este registro:", key="pred_name")
             submitted = st.button("🔍 Realizar Predicción", use_container_width=True, disabled=(uploaded is None))
 
     with col_display:
@@ -383,22 +383,20 @@ with tab_prediccion:
                 conf = float(np.max(pred))
                 label = le_class.inverse_transform([idx])[0]
 
-                # Mostrar Resultados (sin cambios en la visualización)
-                st.markdown(f"#### Resultados para: *{pred_nameRES}*")
+                st.markdown(f"#### Resultados para: *{current_pred_name}*")
                 with st.container(border=True):
-                    res_col1, res_col2 = st.columns(2)
+                    res_col1, res_col2 = st.columns([1, 2])
                     with res_col1:
                         st.metric(label="Diagnóstico Principal", value=label)
                         st.metric(label="Nivel de Confianza", value=f"{conf:.2%}")
-                    with res_col2:
                         st.image(original, caption="Imagen Analizada", use_container_width=True)
-                    
-                    dfp = pd.DataFrame({"Lesión": le_class.classes_, "Probabilidad": pred.flatten()})
-                    fig = go.Figure(data=go.Scatterpolar(r=dfp['Probabilidad'], theta=dfp['Lesión'], fill='toself'))
-                    fig.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 1])), showlegend=False, height=350, margin=dict(l=40, r=40, t=40, b=40))
-                    st.plotly_chart(fig, use_container_width=True)
 
-                st.success("Análisis completado y guardado en el historial.")
+                    with res_col2:
+                        st.markdown("##### Distribución de Probabilidades")
+                        # CAMBIO: Se usa el gráfico de barras
+                        dfp = pd.DataFrame({"Lesión": le_class.classes_, "Probabilidad": pred.flatten()})
+                        dfp = dfp.set_index("Lesión").sort_values("Probabilidad", ascending=False)
+                        st.bar_chart(dfp)
 
                 # Guardar en historial usando el nombre correcto
                 st.session_state.history.append({
@@ -411,6 +409,8 @@ with tab_prediccion:
                 st.session_state.pred_name = f"Pred_{time.strftime('%Y%m%d_%H%M%S')}"
                 
                 st.success(f'Análisis "{current_pred_name}" completado y guardado en el historial.')
+                
+                
                 st.balloons()
                 
                 # Forzamos un rerun para limpiar el formulario y actualizar el historial visualmente
