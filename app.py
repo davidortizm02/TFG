@@ -257,7 +257,7 @@ def load_custom_css():
 
 # --- CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(
-    page_title="Skin-AI | Clasificador de Lesiones",
+    page_title="Clasificador de Lesiones",
     page_icon="🩺",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -307,21 +307,28 @@ with st.sidebar:
                         st.markdown(f"- **{k.capitalize()}:** {v}")
 
 # --- CONTENIDO PRINCIPAL ---
-st.title("🩺 Skin-AI: Asistente de Clasificación de Lesiones Cutáneas")
-st.caption("Una herramienta de IA para la clasificación preliminar de lesiones en la piel. Desarrollado como Prueba de Concepto.")
+st.title("🩺 Asistente de Clasificación de Lesiones Cutáneas")
+st.caption("Una herramienta de IA para la clasificación preliminar de lesiones en la piel.")
 
 tab_inicio, tab_prediccion, tab_info = st.tabs(["🏠 Inicio", "🧪 Nueva Predicción", "📚 Sobre la App"])
 
 with tab_inicio:
     # (El contenido de esta pestaña no ha cambiado)
-    st.markdown("### ¡Bienvenido a Skin-AI!")
+    st.markdown("### Bienvenido a la app!")
     st.markdown("""
     Esta aplicación utiliza un modelo de Red Neuronal Convolucional para analizar imágenes de lesiones cutáneas y predecir a cuál de las siguientes categorías podría pertenecer:
-    - Melanoma, Nevus, Queratosis Seborreica, Carcinoma, Lentigo, Dermatofibroma.
+    - Melanoma (MEL).
+    - Nevus melanocítico (NV).
+    - Carcinoma de células basales (BCC).
+    - Queratosis actínica (AK).
+    - Queratosis benigna (BKL).
+    - Dermatofibroma (DF).
+    - Lesión vascular (VASC).
+    - Carcinoma escamocelular (SCC).
 
     **¿Cómo empezar?**
     1.  Ve a la pestaña **"🧪 Nueva Predicción"**.
-    2.  Sube una imagen clara y bien iluminada de la lesión.
+    2.  Sube una imagen clara, centrada y bien iluminada de la lesión.
     3.  Elige el modelo a utilizar y completa los datos requeridos.
     4.  Haz clic en "Realizar Predicción" y explora los resultados.
     """)
@@ -429,9 +436,10 @@ with tab_info:
     # (El contenido de esta pestaña no ha cambiado)
     st.markdown("### 📚 Sobre la Aplicación")
     st.markdown("""
-    **Skin-AI** es un proyecto demostrativo diseñado para mostrar las capacidades de los modelos de Deep Learning, específicamente Redes Neuronales Convolucionales (CNNs), en el campo de la dermatología computacional.
+    Esta app se trata de un TFG diseñado para mostrar las capacidades de los modelos de Deep Learning, específicamente Redes Neuronales Convolucionales (CNNs), en el campo de la dermatología. 
+    Además se utilizan modelos entrenados mediante técnicas de Aprendizaje Federado (FL).
     
     - **Modelo Híbrido:** Combina las características extraídas por una CNN de la imagen con metadatos tabulares (edad, sexo, localización, etc.) para mejorar la precisión contextual.
-    - **Tecnologías:** Python, TensorFlow/Keras, Scikit-learn, OpenCV, Streamlit, Plotly.
+    - **Tecnologías:** Python, TensorFlow/Keras, Scikit-learn, OpenCV, Streamlit, Plotly, Kaggle.
     """)
-    st.warning("**Disclaimer Importante:** Esta herramienta es una prueba de concepto académica y **NO** debe ser utilizada para autodiagnóstico o como sustituto de una consulta médica profesional.")
+    st.warning("**Aviso Importante:** Esta herramienta es un TFG y **NO** debe ser utilizada para autodiagnóstico o como sustituto de una consulta médica profesional.")
