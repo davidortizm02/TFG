@@ -385,7 +385,6 @@ with tab_prediccion:
 
                 # Mostrar Resultados (sin cambios en la visualización)
                 st.markdown(f"#### Resultados para: *{pred_nameRES}*")
-                
                 with st.container(border=True):
                     res_col1, res_col2 = st.columns(2)
                     with res_col1:
@@ -401,7 +400,7 @@ with tab_prediccion:
 
                 # Guardar en historial
                 st.session_state.history.append({
-                    'name': pred_name, 'timestamp': time.strftime('%Y-%m-%d %H:%M:%S'),
+                    'name': pred_nameRES, 'timestamp': time.strftime('%Y-%m-%d %H:%M:%S'),
                     'original': original, 'model': model_choice, 'label': label,
                     'confidence': conf, 'meta': meta if meta else None
                 })
