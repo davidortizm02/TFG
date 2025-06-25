@@ -223,10 +223,11 @@ if 'history' not in st.session_state:
 if st.session_state.history:
     options = []
     for i, h in enumerate(st.session_state.history):
+        # Asegurarse de llaves esenciales
         if 'name' not in h or not h['name']:
-            # Generar nombre por defecto si falta
-            default_name = f"Predicción_{i+1}_{h.get('timestamp', '')}"
-            h['name'] = default_name
+            h['name'] = f"Predicción_{i+1}_{h.get('timestamp','')}"
+        if 'model' not in h:
+            h['model'] = "Modelo desconocido"
         options.append(h['name'])
     sel = st.sidebar.selectbox(
         "Ver resultados guardados:",
@@ -235,7 +236,7 @@ if st.session_state.history:
     sel_idx = options.index(sel)
     record = st.session_state.history[sel_idx]
     with st.sidebar.expander("Detalles de la predicción", expanded=True):
-        st.image(record['original'], use_column_width=True)
+        st.image(record['original'], use_container_width=True)
         st.markdown(f"**Nombre:** {record['name']}")
         st.markdown(f"**Timestamp:** {record['timestamp']}")
         st.markdown(f"**Modelo:** {record['model']}")
