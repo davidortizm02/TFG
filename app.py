@@ -190,114 +190,147 @@ def preprocess_image_for_model(image_file, target_size=224):
 # Interfaz de Streamlit
 # =====================
 
+# Custom CSS for styling
+def local_css():
+    st.markdown(
+        """
+        <style>
+            .app-header {display: flex; align-items: center;}
+            .app-header img {margin-right: 10px;}
+            .metric-label {font-size: 18px; color: #333;}
+            .history-item {padding: 10px; border-bottom: 1px solid #eee;}
+        </style>
+        """, unsafe_allow_html=True
+    )
 
-# Configuración de página
-st.set_page_config(page_title="🧠 Clasificador de Lesiones Cutáneas", layout="wide")
+# Página y tema
+st.set_page_config(
+    page_title="🧠 Skin Lesion Classifier",
+    page_icon="🧠",
+    layout="wide",
+)
+local_css()
+
+# Sidebar: logo y historial
+st.sidebar.image("assets/logo.png", use_column_width=True)
+st.sidebar.title("Historial de Predicciones")
+if 'history' not in st.session_state:
+    st.session_state.history = []
+
+# Selector de historial
+if st.session_state.history:
+    sel = st.sidebar.selectbox(
+        "Ver resultados guardados:",
+        options=[f"{i+1}. {h['timestamp']}" for i, h in enumerate(st.session_state.history)]
+    )
+    sel_idx = int(sel.split('.')[0]) - 1
+    record = st.session_state.history[sel_idx]
+    with st.sidebar.expander("Detalles de la predicción", expanded=True):
+        st.image(record['original'], use_column_width=True)
+        st.markdown(f"**Lesión:** {record['label']}")
+        st.markdown(f"**Confianza:** {record['confidence']:.2%}")
+        if record.get('meta'):
+            st.markdown("**Metadatos:**")
+            st.json(record['meta'])
 
 # Título principal
-st.markdown("# 🧠 Clasificador de Lesiones Cutáneas")
+st.markdown("<div class='app-header'><img src='assets/logo.png' width='50'><h1>🧠 Clasificador de Lesiones Cutáneas</h1></div>", unsafe_allow_html=True)
 st.markdown("---")
 
-# Cargar recursos
+# Carga de recursos
 try:
     feature_cols, preproc, le_class, model_hybrid, model_img = load_all_resources()
 except FileNotFoundError as e:
     st.error(f"Falta un archivo necesario: {e}")
     st.stop()
 
-# Selección de modelo y carga de imagen en área principal
-st.subheader("1. Configuración de Predicción")
-model_choice = st.radio("Elige el modelo:", ("Híbrido (imagen + metadatos)", "Solo imagen"))
-uploaded = st.file_uploader("Sube un archivo JPG/PNG:", type=["jpg","jpeg","png"])
+# Área de predicción
+col_config, col_display = st.columns([1, 2], gap="large")
+with col_config:
+    st.subheader("1. Configuración")
+    model_choice = st.radio("Modelo:", ("Híbrido (imagen + metadatos)", "Solo imagen"))
+    uploaded = st.file_uploader("Sube JPG/PNG:", type=["jpg", "jpeg", "png"])
+    # Metadatos dinámicos
+    meta = {}
+    if model_choice.startswith("Híbrido"):
+        st.subheader("2. Metadatos")
+        meta['edad'] = st.number_input("Edad aproximada:", 0, 120, 50)
+        meta['sexo'] = st.selectbox("Sexo:", ["male", "female", "unknown"])
+        meta['zona'] = st.selectbox("Zona anatómica:", [
+            "anterior torso","head/neck","lateral torso","lower extremity",
+            "upper extremity","oral/genital","palms/soles","posterior torso","unknown"
+        ])
+        meta['dataset'] = st.selectbox("Fuente del dataset:", [
+            "BCN_nan","HAM_vidir_molemax","HAM_vidir_modern",
+            "HAM_rosendahl","MSK4nan","HAM_vienna_dias"
+        ])
+    submitted = st.button("🔍 Realizar Predicción")
 
-# Metadatos solo para modelo híbrido
-edad = None
-sexo = None
-site = None
-dataset = None
-if model_choice == "Híbrido (imagen + metadatos)":
-    st.subheader("2. Metadatos del Paciente")
-    edad = st.number_input("Edad aproximada:", min_value=0, max_value=120, value=50)
-    sexo = st.selectbox("Sexo:", ["male","female","unknown"])
-    site = st.selectbox("Zona anatómica:", [
-        "anterior torso","head/neck","lateral torso","lower extremity",
-        "upper extremity","oral/genital","palms/soles","posterior torso","unknown"
-    ])
-    dataset = st.selectbox("Fuente del dataset:", [
-        "BCN_nan","HAM_vidir_molemax","HAM_vidir_modern",
-        "HAM_rosendahl","MSK4nan","HAM_vienna_dias"
-    ])
-
-submitted = st.button("Realizar Predicción")
-
-# Función para mostrar imágenes adaptativas
-def show_images(original, vis, mask=None):
-    if mask is not None:
-        cols = st.columns(3, gap="large")
-        cols[0].image(original, caption="Original", use_container_width=True)
-        cols[1].image(vis, caption="Preprocesada", use_container_width=True)
-        cols[2].image(mask, caption="Máscara de lesión", use_container_width=True)
-    else:
-        cols = st.columns(2, gap="large")
-        cols[0].image(original, caption="Original", use_container_width=True)
-        cols[1].image(vis, caption="Preprocesada (224×224)", use_container_width=True)
-
-# Procesamiento y predicción
-if uploaded and submitted:
-    with st.spinner('Procesando predicción...'):
-        img_batch, img_vis = preprocess_image_for_model(uploaded)
-        original = Image.open(uploaded).convert('RGB')
-
-        with st.expander("📷 Visualización de Imágenes", expanded=True):
+with col_display:
+    if uploaded and submitted:
+        with st.spinner('Procesando...'):
+            # Preprocesamiento
+            img_batch, img_vis = preprocess_image_for_model(uploaded)
+            original = Image.open(uploaded).convert('RGB')
+            # Visualización
+            with st.expander("Visualización de Imágenes", expanded=True):
+                if model_choice.startswith("Híbrido"):
+                    gray = cv2.cvtColor(np.array(img_vis), cv2.COLOR_RGB2GRAY)
+                    _, mask = extract_features_from_array(np.array(img_vis), gray)
+                    cols = st.columns(3)
+                    cols[0].image(original, caption="Original", use_container_width=True)
+                    cols[1].image(img_vis, caption="Procesada", use_container_width=True)
+                    cols[2].image(mask, caption="Máscara", use_container_width=True)
+                else:
+                    cols = st.columns(2)
+                    cols[0].image(original, caption="Original", use_container_width=True)
+                    cols[1].image(img_vis, caption="Procesada (224×224)", use_container_width=True)
+            # Preparar datos para predicción
             if model_choice.startswith("Híbrido"):
-                gray = cv2.cvtColor(np.array(img_vis), cv2.COLOR_RGB2GRAY)
-                _, mask = extract_features_from_array(np.array(img_vis), gray)
-                show_images(original, img_vis, mask)
+                feats_raw, _ = extract_features_from_array(np.array(img_vis), gray)
+                # Categoría de edad
+                grp = ('young' if meta['edad']<=35 else 'adult' if meta['edad']<=65 else 'senior')
+                df_meta = pd.DataFrame([{**{
+                    "age_approx": meta['edad'],
+                    "sex": meta['sexo'],
+                    "anatom_site_general": meta['zona'],
+                    "dataset": meta['dataset'],
+                    "age_sex_interaction": f"{meta['sexo']}_{grp}"
+                }, **feats_raw}])
+                X_meta = preproc.transform(df_meta)
+                inputs = [img_batch, X_meta]
+                model = model_hybrid
+                record_meta = df_meta.to_dict(orient='records')[0]
             else:
-                show_images(original, img_vis)
-
-        # Preparar entradas
-        if model_choice.startswith("Híbrido"):
-            feats_raw, _ = extract_features_from_array(np.array(img_vis), gray)
-            if edad <= 35:
-                grp = "young"
-            elif edad <= 65:
-                grp = "adult"
-            else:
-                grp = "senior"
-            df_meta = pd.DataFrame([{**{
-                "age_approx": edad,
-                "sex": sexo,
-                "anatom_site_general": site,
-                "dataset": dataset,
-                "age_sex_interaction": f"{sexo}_{grp}"
-            }, **feats_raw}])
-            X_meta = preproc.transform(df_meta)
-            inputs = [img_batch, X_meta]
-            model = model_hybrid
-        else:
-            inputs = img_batch
-            model = model_img
-
-        pred = model.predict(inputs, verbose=0)
-        idx = int(np.argmax(pred, axis=1)[0])
-        conf = float(np.max(pred))
-        label = le_class.inverse_transform([idx])[0]
-
-        # Mostrar resultados
-        st.markdown("---")
-        col1, col2 = st.columns([1, 2])
-        with col1:
-            st.metric(label="**Lesión Predicha**", value=label)
-            st.metric(label="**Confianza**", value=f"{conf:.2%}")
-        with col2:
-            dfp = pd.DataFrame({
-                "Lesión": le_class.classes_,
-                "Probabilidad": pred.flatten()
-            }).set_index("Lesión").sort_values("Probabilidad", ascending=False)
-            st.bar_chart(dfp)
-else:
-    st.info("Sube una imagen y configura la predicción para ver resultados.")
+                inputs = img_batch
+                model = model_img
+                record_meta = None
+            # Predicción
+            pred = model.predict(inputs, verbose=0)
+            idx = int(np.argmax(pred, axis=1)[0])
+            conf = float(np.max(pred))
+            label = le_class.inverse_transform([idx])[0]
+            # Resultados
+            st.markdown("---")
+            r1, r2 = st.columns([1,2])
+            with r1:
+                st.metric(label="Lesión Predicha", value=label)
+                st.metric(label="Confianza", value=f"{conf:.2%}")
+            with r2:
+                dfp = pd.DataFrame({"Lesión": le_class.classes_, "Probabilidad": pred.flatten()})
+                dfp = dfp.set_index("Lesión").sort_values("Probabilidad", ascending=False)
+                st.bar_chart(dfp)
+            # Guardar en historial
+            timestamp = time.strftime('%Y-%m-%d %H:%M:%S')
+            st.session_state.history.append({
+                'timestamp': timestamp,
+                'original': original,
+                'label': label,
+                'confidence': conf,
+                'meta': record_meta
+            })
+    else:
+        st.info("Sube una imagen y configura la predicción para ejecutar.")
 
 st.markdown("---")
-st.caption("TFG – Mejora visual y usabilidad de la interfaz Streamlit.")
+st.caption("TFG – Interfaz mejorada y guardado de historial.")
