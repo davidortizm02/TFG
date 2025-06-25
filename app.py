@@ -206,12 +206,13 @@ def local_css():
 
 # Página y tema
 st.set_page_config(
-    page_title="🧠 Skin Lesion Classifier",
+    page_title="Skin Lesion Classifier",
     page_icon="🧠",
     layout="wide",
 )
 local_css()
 
+# Sidebar: historial
 st.sidebar.title("Historial de Predicciones")
 if 'history' not in st.session_state:
     st.session_state.history = []
@@ -220,20 +221,24 @@ if 'history' not in st.session_state:
 if st.session_state.history:
     sel = st.sidebar.selectbox(
         "Ver resultados guardados:",
-        options=[f"{i+1}. {h['timestamp']}" for i, h in enumerate(st.session_state.history)]
+        options=[h['name'] for h in st.session_state.history]
     )
-    sel_idx = int(sel.split('.')[0]) - 1
+    sel_idx = next(i for i, h in enumerate(st.session_state.history) if h['name'] == sel)
     record = st.session_state.history[sel_idx]
     with st.sidebar.expander("Detalles de la predicción", expanded=True):
-        st.image(record['original'], use_container_width=True)
+        st.image(record['original'], use_column_width=True)
+        st.markdown(f"**Nombre:** {record['name']}")
+        st.markdown(f"**Timestamp:** {record['timestamp']}")
+        st.markdown(f"**Modelo:** {record['model']}")
         st.markdown(f"**Lesión:** {record['label']}")
         st.markdown(f"**Confianza:** {record['confidence']:.2%}")
         if record.get('meta'):
             st.markdown("**Metadatos:**")
-            st.json(record['meta'])
+            for k, v in record['meta'].items():
+                st.markdown(f"- **{k.capitalize()}:** {v}")
 
 # Título principal
-st.markdown("<div class='app-header'><h1>🧠 Clasificador de Lesiones Cutáneas</h1></div>", unsafe_allow_html=True)
+st.markdown("<div class='app-header'><h1>Clasificador de Lesiones Cutáneas</h1></div>", unsafe_allow_html=True)
 st.markdown("---")
 
 # Carga de recursos
@@ -244,11 +249,14 @@ except FileNotFoundError as e:
     st.stop()
 
 # Área de predicción
+timestamp_default = time.strftime('%Y-%m-%d_%H-%M-%S')
 col_config, col_display = st.columns([1, 2], gap="large")
 with col_config:
     st.subheader("1. Configuración")
     model_choice = st.radio("Modelo:", ("Híbrido (imagen + metadatos)", "Solo imagen"))
     uploaded = st.file_uploader("Sube JPG/PNG:", type=["jpg", "jpeg", "png"])
+    pred_name = st.text_input("Nombre del registro:", f"Predicción_{timestamp_default}")
+
     # Metadatos dinámicos
     meta = {}
     if model_choice.startswith("Híbrido"):
@@ -287,7 +295,6 @@ with col_display:
             # Preparar datos para predicción
             if model_choice.startswith("Híbrido"):
                 feats_raw, _ = extract_features_from_array(np.array(img_vis), gray)
-                # Categoría de edad
                 grp = ('young' if meta['edad']<=35 else 'adult' if meta['edad']<=65 else 'senior')
                 df_meta = pd.DataFrame([{**{
                     "age_approx": meta['edad'],
@@ -299,11 +306,9 @@ with col_display:
                 X_meta = preproc.transform(df_meta)
                 inputs = [img_batch, X_meta]
                 model = model_hybrid
-                record_meta = df_meta.to_dict(orient='records')[0]
             else:
                 inputs = img_batch
                 model = model_img
-                record_meta = None
             # Predicción
             pred = model.predict(inputs, verbose=0)
             idx = int(np.argmax(pred, axis=1)[0])
@@ -322,11 +327,13 @@ with col_display:
             # Guardar en historial
             timestamp = time.strftime('%Y-%m-%d %H:%M:%S')
             st.session_state.history.append({
+                'name': pred_name,
                 'timestamp': timestamp,
                 'original': original,
+                'model': model_choice,
                 'label': label,
                 'confidence': conf,
-                'meta': record_meta
+                'meta': meta if meta else None
             })
     else:
         st.info("Sube una imagen y configura la predicción para ejecutar.")
