@@ -398,12 +398,6 @@ with tab_prediccion:
                     fig.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 1])), showlegend=False, height=350, margin=dict(l=40, r=40, t=40, b=40))
                     st.plotly_chart(fig, use_container_width=True)
 
-                # Guardar en historial
-                st.session_state.history.append({
-                    'name': pred_nameRES, 'timestamp': time.strftime('%Y-%m-%d %H:%M:%S'),
-                    'original': original, 'model': model_choice, 'label': label,
-                    'confidence': conf, 'meta': meta if meta else None
-                })
                 st.success("Análisis completado y guardado en el historial.")
 
                 # Guardar en historial usando el nombre correcto
