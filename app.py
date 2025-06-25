@@ -13,7 +13,7 @@ import time
 from skimage.feature import graycomatrix, graycoprops, local_binary_pattern
 from skimage.morphology import opening, closing, disk
 from skimage.measure import label, regionprops
-
+import plotly.graph_objects as go
 # ——————————————————————————————
 # Parámetros globales y configuración
 # ——————————————————————————————
@@ -190,7 +190,6 @@ def preprocess_image_for_model(image_file, target_size=224):
 # =====================
 # Interfaz de Streamlit
 # =====================
-
 
 # --- ESTILO VISUAL Y CSS ---
 def load_custom_css():
