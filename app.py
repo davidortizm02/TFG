@@ -212,7 +212,7 @@ st.set_page_config(
 local_css()
 
 # Sidebar: logo y historial
-st.sidebar.image("assets/logo.jpg", use_column_width=True)
+st.sidebar.image("assets/logo.jpg", use_container_width=True)
 st.sidebar.title("Historial de Predicciones")
 if 'history' not in st.session_state:
     st.session_state.history = []
@@ -226,7 +226,7 @@ if st.session_state.history:
     sel_idx = int(sel.split('.')[0]) - 1
     record = st.session_state.history[sel_idx]
     with st.sidebar.expander("Detalles de la predicción", expanded=True):
-        st.image(record['original'], use_column_width=True)
+        st.image(record['original'], use_container_width=True)
         st.markdown(f"**Lesión:** {record['label']}")
         st.markdown(f"**Confianza:** {record['confidence']:.2%}")
         if record.get('meta'):
@@ -234,7 +234,7 @@ if st.session_state.history:
             st.json(record['meta'])
 
 # Título principal
-st.markdown("<div class='app-header'><img src='assets/logo.png' width='50'><h1>🧠 Clasificador de Lesiones Cutáneas</h1></div>", unsafe_allow_html=True)
+st.markdown("<div class='app-header'><h1>🧠 Clasificador de Lesiones Cutáneas</h1></div>", unsafe_allow_html=True)
 st.markdown("---")
 
 # Carga de recursos
