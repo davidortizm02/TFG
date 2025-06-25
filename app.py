@@ -6,7 +6,6 @@ import pandas as pd
 from PIL import Image
 from tensorflow.keras.models import load_model
 from tensorflow.keras.applications.efficientnet_v2 import preprocess_input as effnet_preprocess
-import tensorflow as tf
 import joblib
 import json
 
@@ -18,36 +17,33 @@ from skimage.measure import label, regionprops
 # Parámetros globales y configuración
 # ——————————————————————————————
 st.set_page_config(page_title="Clasificador de Lesiones Cutáneas", layout="wide")
-FOLDERS_BASE    = "/kaggle/working/dataset_sin_peloTODO"
-METADATA_PATH   = "/kaggle/input/d/antonioortizmoreno/metadatafl/ISIC_2019_Training_Metadata_FL.csv"
-OUTPUT_CSV_PATH = "/kaggle/working/enriched_ISIC_2019_Metadata_improved.csv"
 
 # GLCM settings
-GLCM_DISTANCES = [1, 2, 4]
-GLCM_ANGLES    = [0, np.pi/4, np.pi/2, 3*np.pi/4]
-GLCM_LEVELS    = 8
+distances = [1, 2, 4]
+angles    = [0, np.pi/4, np.pi/2, 3*np.pi/4]
+levels    = 8
 
 # LBP settings
-LBP_RADIUS     = 1
-LBP_POINTS     = 8 * LBP_RADIUS
+lbp_radius = 1
+lbp_points = 8 * lbp_radius
 
-# Morfología / segmentación
-MORPH_OPEN_RADIUS  = 3
-MORPH_CLOSE_RADIUS = 5
-MIN_LESION_AREA    = 100
+# Segmentation settings
+open_rad = 3
+close_rad = 5
+min_area  = 100
 
 # =====================
 # Carga de recursos (cacheado)
 # =====================
 @st.cache_resource
 def load_all_resources():
-    """Carga modelos y preprocesadores."""
     with open("feature_columns.json", "r") as f:
-        feature_columns = json.load(f)
+        feature_cols = json.load(f)
     preprocessor = joblib.load("preprocessor_metadata.pkl")
     label_encoder = joblib.load("labelencoder_class.pkl")
-    model = load_model("modelo_hibrido_entrenadoCW.keras", compile=False)
-    return feature_columns, preprocessor, label_encoder, model
+    model_hybrid = load_model("modelo_hibrido_entrenadoCW.keras", compile=False)
+    model_img    = load_model("modelo_imagenes_entrenado2.keras", compile=False)
+    return feature_cols, preprocessor, label_encoder, model_hybrid, model_img
 
 # =====================
 # Funciones de segmentación y extracción de features
@@ -147,6 +143,7 @@ def extract_features_from_array(img_rgb, gray):
     feats.update(compute_lbp_features(gray_roi, mask_roi))
 
     return feats, mask
+
 # =====================
 # Funciones de preprocesamiento de la imagen para el modelo
 # =====================
@@ -185,98 +182,105 @@ def preprocess_image_for_model(image_file, target_size=224):
     img_array = effnet_preprocess(img_array)
     return img_array, rgb.astype(np.uint8)
 
+
+
+
+
 # =====================
 # Interfaz de Streamlit
 # =====================
-
 st.title("🧠 Clasificador de Lesiones Cutáneas")
-st.markdown("Sube una imagen de una lesión y completa los metadatos para predecir su tipo.")
+st.markdown("Selecciona el modelo y sube la imagen para predecir el tipo de lesión.")
 
-# Carga recursos
+# Cargar recursos
 try:
-    feature_columns, preprocessor, le_class, model = load_all_resources()
+    feature_cols, preproc, le_class, model_hybrid, model_img = load_all_resources()
 except FileNotFoundError as e:
     st.error(f"Falta un archivo necesario: {e}")
     st.stop()
 
-col1, col2 = st.columns(2)
+# Selección de modelo
+model_choice = st.radio("Elige el modelo", (
+    "Híbrido (imagen + metadatos)",
+    "Solo imagen"
+))
+
+col1, col2 = st.columns([1, 1])
 with col1:
     st.header("1. Sube la Imagen")
-    tile = st.file_uploader("Selecciona un JPG/PNG", type=["jpg","jpeg","png"])
-    st.header("2. Introduce los Metadatos")
-    with st.form("metadata_form"):
-        edad = st.number_input("Edad aproximada", min_value=0, max_value=120, value=50)
-        sexo = st.selectbox("Sexo", ["male","female","unknown"])
-        site = st.selectbox("Zona anatómica", [
-            "anterior torso","head/neck","lateral torso","lower extremity",
-            "upper extremity","oral/genital","palms/soles","posterior torso","unknown"
-        ])
-        dataset = st.selectbox("Fuente del dataset", [
-            "BCN_nan","HAM_vidir_molemax","HAM_vidir_modern",
-            "HAM_rosendahl","MSK4nan","HAM_vienna_dias"
-        ])
-        submit_button = st.form_submit_button("Realizar Predicción")
+    uploaded = st.file_uploader("Selecciona un JPG/PNG", type=["jpg","jpeg","png"])
 
-if tile and submit_button:
-    with col2:
-        st.header("3. Análisis y Predicción")
+    if model_choice == "Híbrido (imagen + metadatos)":
+        st.header("2. Introduce Metadatos")
+        with st.form(key="meta_form"):
+            edad = st.number_input("Edad aproximada", 0, 120, 50)
+            sexo = st.selectbox("Sexo", ["male","female","unknown"])
+            site = st.selectbox("Zona anatómica", [
+                "anterior torso","head/neck","lateral torso","lower extremity",
+                "upper extremity","oral/genital","palms/soles","posterior torso","unknown"
+            ])
+            dataset = st.selectbox("Fuente del dataset", [
+                "BCN_nan","HAM_vidir_molemax","HAM_vidir_modern",
+                "HAM_rosendahl","MSK4nan","HAM_vienna_dias"
+            ])
+            submit = st.form_submit_button("Realizar Predicción")
+    else:
+        submit = st.button("Realizar Predicción")
+
+if uploaded and submit:
+    with st.spinner('Procesando...'):
         # Preprocesar imagen
-        img_batch, img_vis = preprocess_image_for_model(tile)
-        gray = cv2.cvtColor(img_vis, cv2.COLOR_RGB2GRAY)
+        img_batch, img_vis = preprocess_image_for_model(uploaded)
+        # Si es híbrido, extraer features y metadatos
+        if model_choice == "Híbrido (imagen + metadatos)":
+            gray = cv2.cvtColor(img_vis, cv2.COLOR_RGB2GRAY)
+            feats_raw, mask = extract_features_from_array(img_vis, gray)
 
-        # Extraer features de imagen
-        feats_raw, mask = extract_features_from_array(img_vis, gray)
+            # Mostrar segmentación y features
+            with st.expander("🔍 Segmentación y Features", expanded=True):
+                st.image(img_vis, caption="Imagen 224×224", use_container_width=True)
+                st.image(mask, caption="Máscara de lesión", use_container_width=True)
+                st.dataframe(pd.DataFrame([feats_raw]).fillna("NaN"))
 
-        with st.expander("🔍 Diagnóstico: Segmentación y Features", expanded=True):
-            st.image(img_vis, caption="Imagen 224×224", use_container_width=True)
-            st.image(mask, caption="Máscara de lesión", use_container_width=True)
-            st.dataframe(pd.DataFrame([feats_raw]).fillna("NaN"))
+            # Preparar DataFrame metadatos
+            if edad <= 35: grp = "young"
+            elif edad <= 65: grp = "adult"
+            else: grp = "senior"
 
-        # Codificar age_group
-        if edad <= 35: grp = "young"
-        elif edad <= 65: grp = "adult"
-        else: grp = "senior"
+            df_meta = pd.DataFrame([{
+                "age_approx": edad,
+                "sex": sexo,
+                "anatom_site_general": site,
+                "dataset": dataset,
+                "age_sex_interaction": f"{sexo}_{grp}",
+                **feats_raw
+            }])
+            X_meta = preproc.transform(df_meta)
+            model = model_hybrid
+            inputs = [img_batch, X_meta]
+        else:
+            model = model_img
+            inputs = img_batch
 
-        df_meta = pd.DataFrame([{
-            "age_approx": edad,
-            "sex": sexo,
-            "anatom_site_general": site,
-            "dataset": dataset,
-            "age_sex_interaction": f"{sexo}_{grp}",
-            **feats_raw
-        }])
-
-        # Transformar metadatos
-        try:
-            X_meta = preprocessor.transform(df_meta)
-        except Exception as e:
-            st.error(f"Error en preprocesado: {e}")
-            st.stop()
-
-        with st.expander("🔬 Diagnóstico: Preprocesamiento Metadatos", expanded=True):
-            st.subheader("Antes de transformar")
-            st.dataframe(df_meta.fillna("NaN"))
-            st.subheader("Después de transformar")
-            arr = X_meta.toarray() if hasattr(X_meta, "toarray") else X_meta
-            st.dataframe(pd.DataFrame(arr))
-            #if hasattr(preprocessor, 'get_feature_names_out'):
-             #   st.write("Orden de columnas tras transformación:")
-               # st.write(preprocessor.get_feature_names_out())
-        # Predicción híbrida
-        pred = model.predict([img_batch, X_meta], verbose=0)
+        # Predicción
+        pred = model.predict(inputs, verbose=0)
         idx = int(np.argmax(pred, axis=1)[0])
         conf = float(np.max(pred))
         label = le_class.inverse_transform([idx])[0]
 
-        st.success(f"**Clase:** {label}  |  **Confianza:** {conf:.2%}")
-        dfp = pd.DataFrame({
-            "Clase": le_class.classes_,
-            "Probabilidad": pred.flatten()
-        }).set_index("Clase").sort_values("Probabilidad", ascending=False)
-        st.bar_chart(dfp)
+        # Mostrar resultados
+        with col2:
+            st.header("3. Resultado")
+            st.success(f"**Clase:** {label}  |  **Confianza:** {conf:.2%}")
+            dfp = pd.DataFrame({
+                "Clase": le_class.classes_,
+                "Probabilidad": pred.flatten()
+            }).set_index("Clase").sort_values("Probabilidad", ascending=False)
+            st.bar_chart(dfp)
+
 else:
     with col2:
-        st.info("Sube una imagen y completa el formulario para predecir.")
+        st.info("Sube una imagen y selecciona opciones para predecir.")
 
 st.markdown("---")
-st.caption("TFG – Clasificador híbrido con diagnóstico de características.")
+st.caption("TFG – Clasificador de lesiones con selección de modelo y mejora de interfaz.")
