@@ -19,18 +19,19 @@ from skimage.measure import label, regionprops
 st.set_page_config(page_title="Clasificador de Lesiones Cutáneas", layout="wide")
 
 # GLCM settings
-distances = [1, 2, 4]
-angles    = [0, np.pi/4, np.pi/2, 3*np.pi/4]
-levels    = 8
+GLCM_DISTANCES = [1, 2, 4]
+GLCM_ANGLES    = [0, np.pi/4, np.pi/2, 3*np.pi/4]
+GLCM_LEVELS    = 8
 
 # LBP settings
-lbp_radius = 1
-lbp_points = 8 * lbp_radius
+LBP_RADIUS     = 1
+LBP_POINTS     = 8 * LBP_RADIUS
 
-# Segmentation settings
-open_rad = 3
-close_rad = 5
-min_area  = 100
+# Morfología / segmentación
+MORPH_OPEN_RADIUS  = 3
+MORPH_CLOSE_RADIUS = 5
+MIN_LESION_AREA    = 100
+
 
 # =====================
 # Carga de recursos (cacheado)
