@@ -191,6 +191,7 @@ def preprocess_image_for_model(image_file, target_size=224):
 # Interfaz de Streamlit
 # =====================
 
+
 # Custom CSS for styling
 def local_css():
     st.markdown(
@@ -219,11 +220,19 @@ if 'history' not in st.session_state:
 
 # Selector de historial
 if st.session_state.history:
+    # Asegurar que cada registro tenga un 'name'
+    options = []
+    for i, h in enumerate(st.session_state.history):
+        if 'name' not in h or not h['name']:
+            default_name = f"Predicción_{i+1}_{h.get('timestamp','')}
+"
+            h['name'] = default_name
+        options.append(h['name'])
     sel = st.sidebar.selectbox(
         "Ver resultados guardados:",
-        options=[h['name'] for h in st.session_state.history]
+        options=options
     )
-    sel_idx = next(i for i, h in enumerate(st.session_state.history) if h['name'] == sel)
+    sel_idx = options.index(sel)
     record = st.session_state.history[sel_idx]
     with st.sidebar.expander("Detalles de la predicción", expanded=True):
         st.image(record['original'], use_column_width=True)
