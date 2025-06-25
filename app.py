@@ -191,6 +191,7 @@ def preprocess_image_for_model(image_file, target_size=224):
 # Interfaz de Streamlit
 # =====================
 
+
 # Custom CSS for styling
 def local_css():
     st.markdown(
@@ -267,14 +268,14 @@ with col_config:
         st.subheader("1. Configuración")
         model_choice = st.radio("Modelo:", ("Híbrido (imagen + metadatos)", "Solo imagen"))
         uploaded = st.file_uploader("Sube JPG/PNG:", type=["jpg", "jpeg", "png"])
-
+        
         # Inicializar pred_name sólo la primera vez
         if 'pred_name' not in st.session_state:
             st.session_state.pred_name = f"Predicción_{timestamp_default}"
-        # Text input SIN key para que no se guarde automáticamente en session_state
-        pred_name_local = st.text_input(
+        pred_name = st.text_input(
             "Nombre del registro:",
-            value=st.session_state.pred_name
+            value=st.session_state.pred_name,
+            key="pred_name"
         )
 
         # Metadatos solo si es híbrido
@@ -297,9 +298,6 @@ with col_config:
 
 with col_display:
     if submitted:
-        # Al hacer submit, actualizamos session_state
-        st.session_state.pred_name = pred_name_local
-
         if not uploaded:
             st.error("Debes subir una imagen antes de predecir.")
         else:
@@ -360,7 +358,7 @@ with col_display:
                 # Guardar en historial ¡aquí!
                 timestamp = time.strftime('%Y-%m-%d %H:%M:%S')
                 st.session_state.history.append({
-                    'name': st.session_state.pred_name,
+                    'name': pred_name,
                     'timestamp': timestamp,
                     'original': original,
                     'model': model_choice,
@@ -368,7 +366,7 @@ with col_display:
                     'confidence': conf,
                     'meta': meta if meta else None
                 })
-                st.success(f"Predicción «{st.session_state.pred_name}» guardada correctamente.")
+                st.success(f"Predicción «{pred_name}» guardada correctamente.")
 
     else:
         st.info("Completa el formulario y pulsa 'Realizar Predicción' para clasificar la lesión.")
