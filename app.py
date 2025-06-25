@@ -9,43 +9,29 @@ from tensorflow.keras.applications.efficientnet_v2 import preprocess_input as ef
 import tensorflow as tf
 import joblib
 import json
+
 from skimage.feature import graycomatrix, graycoprops, local_binary_pattern
 from skimage.morphology import opening, closing, disk
 from skimage.measure import label, regionprops
 
 # ——————————————————————————————
-# Configuración de la página y estilo
+# Parámetros globales y configuración
 # ——————————————————————————————
-st.set_page_config(page_title="Clasificador de Lesiones Cutáneas", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="Clasificador de Lesiones Cutáneas", layout="wide")
+FOLDERS_BASE    = "/kaggle/working/dataset_sin_peloTODO"
+METADATA_PATH   = "/kaggle/input/d/antonioortizmoreno/metadatafl/ISIC_2019_Training_Metadata_FL.csv"
+OUTPUT_CSV_PATH = "/kaggle/working/enriched_ISIC_2019_Metadata_improved.csv"
 
-# Custom CSS para mejorar apariencia
-st.markdown(
-    """
-    <style>
-    /* Ajuste del fondo y tipografía */
-    body {background-color: #f5f5f5;}
-    .stApp {font-family: 'Arial', sans-serif;}
-    /* Cartas y contenedores con sombra y bordes redondeados */
-    .card {background: white; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); padding: 1rem; margin-bottom: 1rem;}
-    /* Encabezados personalizados */
-    h1, h2, h3, h4 {color: #333333;}
-    /* Ocultar menú Streamlit y pie de página */
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
-    </style>
-    """, unsafe_allow_html=True)
-
-# Rutas y parámetros globales (ajustar según entorno)
-FOLDERS_BASE    = os.getenv("FOLDERS_BASE", "/kaggle/working/dataset_sin_peloTODO")
-METADATA_PATH   = os.getenv("METADATA_PATH", "/kaggle/input/d/antonioortizmoreno/metadatafl/ISIC_2019_Training_Metadata_FL.csv")
-OUTPUT_CSV_PATH = os.getenv("OUTPUT_CSV_PATH", "/kaggle/working/enriched_ISIC_2019_Metadata_improved.csv")
-
-# GLCM y LBP
+# GLCM settings
 GLCM_DISTANCES = [1, 2, 4]
 GLCM_ANGLES    = [0, np.pi/4, np.pi/2, 3*np.pi/4]
 GLCM_LEVELS    = 8
+
+# LBP settings
 LBP_RADIUS     = 1
 LBP_POINTS     = 8 * LBP_RADIUS
+
+# Morfología / segmentación
 MORPH_OPEN_RADIUS  = 3
 MORPH_CLOSE_RADIUS = 5
 MIN_LESION_AREA    = 100
@@ -55,13 +41,13 @@ MIN_LESION_AREA    = 100
 # =====================
 @st.cache_resource
 def load_all_resources():
+    """Carga modelos y preprocesadores."""
     with open("feature_columns.json", "r") as f:
         feature_columns = json.load(f)
     preprocessor = joblib.load("preprocessor_metadata.pkl")
     label_encoder = joblib.load("labelencoder_class.pkl")
     model = load_model("modelo_hibrido_entrenadoCW.keras", compile=False)
     return feature_columns, preprocessor, label_encoder, model
-
 
 # =====================
 # Funciones de segmentación y extracción de features
@@ -199,19 +185,26 @@ def preprocess_image_for_model(image_file, target_size=224):
     img_array = effnet_preprocess(img_array)
     return img_array, rgb.astype(np.uint8)
 
-
-
 # =====================
 # Interfaz de Streamlit
 # =====================
-st.markdown("<div class='card'><h1>🧠 Clasificador de Lesiones Cutáneas</h1><p>Sube una imagen de una lesión y completa los metadatos para predecir su tipo.</p></div>", unsafe_allow_html=True)
 
-# Sidebar para carga y metadatos
-with st.sidebar:
-    st.markdown("<div class='card'><h2>1. Sube la Imagen</h2></div>", unsafe_allow_html=True)
+st.title("🧠 Clasificador de Lesiones Cutáneas")
+st.markdown("Sube una imagen de una lesión y completa los metadatos para predecir su tipo.")
+
+# Carga recursos
+try:
+    feature_columns, preprocessor, le_class, model = load_all_resources()
+except FileNotFoundError as e:
+    st.error(f"Falta un archivo necesario: {e}")
+    st.stop()
+
+col1, col2 = st.columns(2)
+with col1:
+    st.header("1. Sube la Imagen")
     tile = st.file_uploader("Selecciona un JPG/PNG", type=["jpg","jpeg","png"])
-    st.markdown("<div class='card'><h2>2. Introduce los Metadatos</h2></div>", unsafe_allow_html=True)
-    with st.form("metadata_form_sidebar"):
+    st.header("2. Introduce los Metadatos")
+    with st.form("metadata_form"):
         edad = st.number_input("Edad aproximada", min_value=0, max_value=120, value=50)
         sexo = st.selectbox("Sexo", ["male","female","unknown"])
         site = st.selectbox("Zona anatómica", [
@@ -224,82 +217,66 @@ with st.sidebar:
         ])
         submit_button = st.form_submit_button("Realizar Predicción")
 
-# Carga recursos
-try:
-    feature_columns, preprocessor, le_class, model = load_all_resources()
-except FileNotFoundError as e:
-    st.error(f"Falta un archivo necesario: {e}")
-    st.stop()
-
-# Área principal para resultado y diagnóstico
 if tile and submit_button:
-    # Indicador de procesamiento
-    with st.spinner('Procesando imagen y metadatos...'):
+    with col2:
+        st.header("3. Análisis y Predicción")
+        # Preprocesar imagen
         img_batch, img_vis = preprocess_image_for_model(tile)
         gray = cv2.cvtColor(img_vis, cv2.COLOR_RGB2GRAY)
+
+        # Extraer features de imagen
         feats_raw, mask = extract_features_from_array(img_vis, gray)
 
-    # Resultados en contenedor con sombra
-    st.markdown("<div class='card'><h2>3. Análisis y Predicción</h2></div>", unsafe_allow_html=True)
-    # Visualización lado a lado
-    col1, col2 = st.columns(2)
-    with col1:
-        st.markdown("<div class='card'><h3>Imagen Procesada</h3></div>", unsafe_allow_html=True)
-        st.image(img_vis, caption="Imagen 224×224", use_column_width=True)
-        st.markdown("<div class='card'><h3>Máscara de Lesión</h3></div>", unsafe_allow_html=True)
-        st.image(mask, caption="Máscara de lesión", use_column_width=True)
-    with col2:
-        st.markdown("<div class='card'><h3>Características Extraídas</h3></div>", unsafe_allow_html=True)
-        df_feats = pd.DataFrame([feats_raw]).fillna("NaN")
-        st.dataframe(df_feats)
+        with st.expander("🔍 Diagnóstico: Segmentación y Features", expanded=True):
+            st.image(img_vis, caption="Imagen 224×224", use_container_width=True)
+            st.image(mask, caption="Máscara de lesión", use_container_width=True)
+            st.dataframe(pd.DataFrame([feats_raw]).fillna("NaN"))
 
-    # Preprocesado de metadatos
-    if edad <= 35:
-        grp = "young"
-    elif edad <= 65:
-        grp = "adult"
-    else:
-        grp = "senior"
-    df_meta = pd.DataFrame([{
-        "age_approx": edad,
-        "sex": sexo,
-        "anatom_site_general": site,
-        "dataset": dataset,
-        "age_sex_interaction": f"{sexo}_{grp}",
-        **feats_raw
-    }])
-    try:
-        X_meta = preprocessor.transform(df_meta)
-    except Exception as e:
-        st.error(f"Error en preprocesado: {e}")
-        st.stop()
+        # Codificar age_group
+        if edad <= 35: grp = "young"
+        elif edad <= 65: grp = "adult"
+        else: grp = "senior"
 
-    with st.expander("🔬 Diagnóstico: Preprocesamiento Metadatos", expanded=False):
-        st.subheader("Antes de transformar")
-        st.dataframe(df_meta.fillna("NaN"))
-        st.subheader("Después de transformar")
-        arr = X_meta.toarray() if hasattr(X_meta, "toarray") else X_meta
-        st.dataframe(pd.DataFrame(arr, columns=feature_columns if 'feature_columns' in locals() else None))
+        df_meta = pd.DataFrame([{
+            "age_approx": edad,
+            "sex": sexo,
+            "anatom_site_general": site,
+            "dataset": dataset,
+            "age_sex_interaction": f"{sexo}_{grp}",
+            **feats_raw
+        }])
 
-    # Predicción
-    with st.spinner('Realizando predicción con el modelo híbrido...'):
+        # Transformar metadatos
+        try:
+            X_meta = preprocessor.transform(df_meta)
+        except Exception as e:
+            st.error(f"Error en preprocesado: {e}")
+            st.stop()
+
+        with st.expander("🔬 Diagnóstico: Preprocesamiento Metadatos", expanded=True):
+            st.subheader("Antes de transformar")
+            st.dataframe(df_meta.fillna("NaN"))
+            st.subheader("Después de transformar")
+            arr = X_meta.toarray() if hasattr(X_meta, "toarray") else X_meta
+            st.dataframe(pd.DataFrame(arr))
+            #if hasattr(preprocessor, 'get_feature_names_out'):
+             #   st.write("Orden de columnas tras transformación:")
+               # st.write(preprocessor.get_feature_names_out())
+        # Predicción híbrida
         pred = model.predict([img_batch, X_meta], verbose=0)
-    idx = int(np.argmax(pred, axis=1)[0])
-    conf = float(np.max(pred))
-    label = le_class.inverse_transform([idx])[0]
+        idx = int(np.argmax(pred, axis=1)[0])
+        conf = float(np.max(pred))
+        label = le_class.inverse_transform([idx])[0]
 
-    # Mostrar resultado principal
-    st.success(f"**Clase Predicha:** {label}  |  **Confianza:** {conf:.2%}")
-    dfp = pd.DataFrame({
-        "Clase": le_class.classes_,
-        "Probabilidad": pred.flatten()
-    }).set_index("Clase").sort_values("Probabilidad", ascending=False)
-    # Gráfico de barras horizontal
-    st.markdown("<div class='card'><h3>Distribución de Probabilidades</h3></div>", unsafe_allow_html=True)
-    st.bar_chart(dfp)
-
+        st.success(f"**Clase:** {label}  |  **Confianza:** {conf:.2%}")
+        dfp = pd.DataFrame({
+            "Clase": le_class.classes_,
+            "Probabilidad": pred.flatten()
+        }).set_index("Clase").sort_values("Probabilidad", ascending=False)
+        st.bar_chart(dfp)
 else:
-    st.markdown("<div class='card'><p>Sube una imagen y completa el formulario en la barra lateral para predecir.</p></div>", unsafe_allow_html=True)
+    with col2:
+        st.info("Sube una imagen y completa el formulario para predecir.")
 
 st.markdown("---")
 st.caption("TFG – Clasificador híbrido con diagnóstico de características.")
