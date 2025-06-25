@@ -408,13 +408,6 @@ with tab_prediccion:
                 #st.session_state.pred_name = f"Pred_{time.strftime('%Y%m%d_%H%M%S')}"
                 
                 st.success(f'Análisis "{current_pred_name}" completado y guardado en el historial.')
-                
-                
-                st.balloons()
-                
-                # Forzamos un rerun para limpiar el formulario y actualizar el historial visualmente
-                time.sleep(2) # Pequeña pausa para que el usuario vea el mensaje de éxito
-                st.rerun()
 
 with tab_info:
     st.markdown("### 📚 Sobre la Aplicación")
