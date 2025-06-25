@@ -341,8 +341,8 @@ with tab_prediccion:
                 meta['dataset'] = st.selectbox("Fuente del dataset:", ["BCN_nan","HAM_vidir_molemax","HAM_vidir_modern","HAM_rosendahl","MSK4nan","HAM_vienna_dias"])
             
             # CAMBIO: Se usa un `key` para vincular el input al estado de la sesión.
-            #pred_name = st.text_input("Nombre para este registro:", value=f"Pred_{time.strftime('%Y%m%d_%H%M%S')}")
-            st.text_input("Nombre para este registro:", key="pred_name")
+            
+            pred_nameRES = st.text_input("Nombre para este registro:", key="pred_name")
             submitted = st.button("🔍 Realizar Predicción", use_container_width=True, disabled=(uploaded is None))
 
     with col_display:
@@ -384,7 +384,8 @@ with tab_prediccion:
                 label = le_class.inverse_transform([idx])[0]
 
                 # Mostrar Resultados (sin cambios en la visualización)
-                st.text_input("Resultados para:", key="pred_name")
+                st.markdown(f"#### Resultados para: *{pred_nameRES}*")
+                
                 with st.container(border=True):
                     res_col1, res_col2 = st.columns(2)
                     with res_col1:
