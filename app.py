@@ -192,20 +192,16 @@ def preprocess_image_for_model(image_file, target_size=224):
 # =====================
 
 
-# --- ESTILO VISUAL Y CSS (CORREGIDO) ---
+# --- ESTILO VISUAL Y CSS ---
 def load_custom_css():
     st.markdown("""
         <style>
             @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap');
-
-            /* Aplicar fuente al contenedor principal de la app de forma segura */
             .stApp {
                 font-family: 'Poppins', sans-serif;
                 background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
                 background-attachment: fixed;
             }
-
-            /* Estilo "Glassmorphism" para la sidebar y otros contenedores */
             .st-emotion-cache-18ni7ap, .st-emotion-cache-1d391kg {
                 background: rgba(255, 255, 255, 0.5);
                 backdrop-filter: blur(10px);
@@ -213,7 +209,6 @@ def load_custom_css():
                 border: 1px solid rgba(255, 255, 255, 0.18);
                 box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
             }
-            
             .stTabs [data-baseweb="tab-list"] { gap: 24px; }
             .stTabs [data-baseweb="tab"] {
                 height: 50px;
@@ -226,7 +221,6 @@ def load_custom_css():
                 background-color: #FFFFFF;
                 box-shadow: 0 2px 4px rgba(0,0,0,0.1);
             }
-
             .stButton>button {
                 border-radius: 8px;
                 padding: 12px 24px;
@@ -240,11 +234,7 @@ def load_custom_css():
                 box-shadow: 0 0 20px #6a11cb80;
                 transform: scale(1.02);
             }
-            .stButton>button:disabled {
-                background: #cccccc;
-                color: #666666;
-            }
-
+            .stButton>button:disabled { background: #cccccc; color: #666666; }
             .stMetric {
                 background-color: #FFFFFF;
                 border-radius: 15px;
@@ -255,15 +245,21 @@ def load_custom_css():
     """, unsafe_allow_html=True)
 
 
-# --- CONFIGURACIÓN DE PÁGINA ---
+# --- CONFIGURACIÓN DE PÁGINA E INICIALIZACIÓN DE ESTADO ---
 st.set_page_config(
-    page_title="Clasificador de Lesiones",
+    page_title="Skin-AI | Clasificador de Lesiones",
     page_icon="🩺",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
 load_custom_css()
+
+# Inicialización del estado de la sesión para el historial y el nombre de la predicción
+if 'history' not in st.session_state:
+    st.session_state.history = []
+if 'pred_name' not in st.session_state:
+    st.session_state.pred_name = f"Pred_{time.strftime('%Y%m%d_%H%M%S')}"
 
 # --- CARGA DE RECURSOS (MODELO, ETC.) ---
 if 'resources_loaded' not in st.session_state:
@@ -281,17 +277,11 @@ if 'resources_loaded' not in st.session_state:
 # --- BARRA LATERAL (SIDEBAR) ---
 with st.sidebar:
     st.markdown("<h1 style='text-align: center;'>📋 Historial</h1>", unsafe_allow_html=True)
-
-    if 'history' not in st.session_state:
-        st.session_state.history = []
-
     if st.button("🗑️ Limpiar Historial"):
         st.session_state.history = []
         st.success("Historial eliminado.")
         st.rerun()
-
     st.markdown("---")
-
     if not st.session_state.history:
         st.info("Aún no hay predicciones guardadas.")
     else:
@@ -307,14 +297,13 @@ with st.sidebar:
                         st.markdown(f"- **{k.capitalize()}:** {v}")
 
 # --- CONTENIDO PRINCIPAL ---
-st.title("🩺 Asistente de Clasificación de Lesiones Cutáneas")
-st.caption("Una herramienta de IA para la clasificación preliminar de lesiones en la piel.")
+st.title("🩺 Skin-AI: Asistente de Clasificación de Lesiones Cutáneas")
+st.caption("Una herramienta de IA para la clasificación preliminar de lesiones en la piel. Desarrollado como TFG.")
 
 tab_inicio, tab_prediccion, tab_info = st.tabs(["🏠 Inicio", "🧪 Nueva Predicción", "📚 Sobre la App"])
 
 with tab_inicio:
-    # (El contenido de esta pestaña no ha cambiado)
-    st.markdown("### Bienvenido a la app!")
+    st.markdown("### ¡Bienvenido a Skin-AI!")
     st.markdown("""
     Esta aplicación utiliza un modelo de Red Neuronal Convolucional para analizar imágenes de lesiones cutáneas y predecir a cuál de las siguientes categorías podría pertenecer:
     - Melanoma (MEL).
@@ -324,16 +313,15 @@ with tab_inicio:
     - Queratosis benigna (BKL).
     - Dermatofibroma (DF).
     - Lesión vascular (VASC).
-    - Carcinoma escamocelular (SCC).
-
+    - Carcinoma escamocelular (SCC)     
+                
     **¿Cómo empezar?**
     1.  Ve a la pestaña **"🧪 Nueva Predicción"**.
-    2.  Sube una imagen clara, centrada y bien iluminada de la lesión.
-    3.  Elige el modelo a utilizar y completa los datos requeridos.
+    2.  Sube una imagen, elige el modelo y completa los datos requeridos.
+    3.  Asigna un nombre único a tu predicción.
     4.  Haz clic en "Realizar Predicción" y explora los resultados.
     """)
-    st.warning("**Disclaimer Importante:** Esta es una herramienta experimental y **NO** un dispositivo de diagnóstico médico. Las predicciones son solo para fines informativos y no deben sustituir la consulta con un dermatólogo cualificado.")
-
+    st.warning("**Aviso Importante:** Esta es una herramienta experimental y **NO** un dispositivo de diagnóstico médico.")
 
 with tab_prediccion:
     col_config, col_display = st.columns([0.4, 0.6], gap="large")
@@ -350,10 +338,11 @@ with tab_prediccion:
                 meta['edad'] = st.slider("Edad:", 1, 100, 50)
                 meta['sexo'] = st.selectbox("Sexo:", ["male", "female", "unknown"])
                 meta['zona'] = st.selectbox("Zona anatómica:", ["anterior torso","head/neck","lateral torso","lower extremity","upper extremity","oral/genital","palms/soles","posterior torso","unknown"])
-                # Campo 'dataset' que faltaba
                 meta['dataset'] = st.selectbox("Fuente del dataset:", ["BCN_nan","HAM_vidir_molemax","HAM_vidir_modern","HAM_rosendahl","MSK4nan","HAM_vienna_dias"])
-
-            pred_name = st.text_input("Nombre para este registro:", value=f"Pred_{time.strftime('%Y%m%d_%H%M%S')}")
+            
+            # CAMBIO: Se usa un `key` para vincular el input al estado de la sesión.
+            st.text_input("Nombre para este registro:", key="pred_name")
+            
             submitted = st.button("🔍 Realizar Predicción", use_container_width=True, disabled=(uploaded is None))
 
     with col_display:
@@ -364,82 +353,72 @@ with tab_prediccion:
             else:
                 st.info("Esperando que subas una imagen para comenzar el análisis.")
 
+        # CAMBIO: La lógica de guardado y predicción solo se activa con el botón
         if submitted and uploaded:
-            with st.spinner('🧠 El modelo está analizando la imagen...'):
+            # El nombre se toma directamente del estado de la sesión, que fue actualizado por el input del usuario
+            current_pred_name = st.session_state.pred_name
+
+            with st.spinner(f'🧠 Analizando "{current_pred_name}"...'):
                 original = Image.open(uploaded).convert('RGB')
                 img_batch, img_vis = preprocess_image_for_model(uploaded)
                 
                 if model_choice.startswith("Híbrido"):
-                    # --- LÓGICA CORREGIDA PARA EL MODELO HÍBRIDO ---
-                    # 1. Convertir imagen procesada a array y a escala de grises
                     img_vis_array = np.array(img_vis)
                     gray = cv2.cvtColor(img_vis_array, cv2.COLOR_RGB2GRAY)
-                    
-                    # 2. Extraer características de la imagen (LBP, GLCM, etc.)
                     feats_raw, _ = extract_features_from_array(img_vis_array, gray)
-
-                    # 3. Calcular características derivadas
                     grp = ('young' if meta['edad'] <= 35 else 'adult' if meta['edad'] <= 65 else 'senior')
                     age_sex_interaction = f"{meta['sexo']}_{grp}"
-
-                    # 4. Construir el DataFrame COMPLETO para el preprocesador
-                    full_meta_dict = {
-                        "age_approx": meta['edad'],
-                        "sex": meta['sexo'],
-                        "anatom_site_general": meta['zona'],
-                        "dataset": meta['dataset'],
-                        "age_sex_interaction": age_sex_interaction,
-                        **feats_raw  # Desempaquetar el diccionario de características de imagen
-                    }
+                    full_meta_dict = {"age_approx": meta['edad'], "sex": meta['sexo'], "anatom_site_general": meta['zona'], "dataset": meta['dataset'], "age_sex_interaction": age_sex_interaction, **feats_raw}
                     df_meta = pd.DataFrame([full_meta_dict])
-
-                    # 5. Transformar y preparar inputs para el modelo
                     X_meta = st.session_state.resources["preproc"].transform(df_meta)
                     inputs = [img_batch, X_meta]
                     model = st.session_state.resources["model_hybrid"]
                 else:
-                    # Lógica para el modelo de solo imagen (sin cambios)
                     inputs = img_batch
                     model = st.session_state.resources["model_img"]
                 
-                # Predicción (común para ambos modelos)
                 le_class = st.session_state.resources["le_class"]
                 pred = model.predict(inputs, verbose=0)
                 idx = int(np.argmax(pred, axis=1)[0])
                 conf = float(np.max(pred))
                 label = le_class.inverse_transform([idx])[0]
 
-                # Mostrar Resultados (sin cambios en la visualización)
-                st.markdown(f"#### Resultados para: *{pred_name}*")
+                st.markdown(f"#### Resultados para: *{current_pred_name}*")
                 with st.container(border=True):
-                    res_col1, res_col2 = st.columns(2)
+                    res_col1, res_col2 = st.columns([1, 2])
                     with res_col1:
                         st.metric(label="Diagnóstico Principal", value=label)
                         st.metric(label="Nivel de Confianza", value=f"{conf:.2%}")
-                    with res_col2:
                         st.image(original, caption="Imagen Analizada", use_container_width=True)
-                    
-                    dfp = pd.DataFrame({"Lesión": le_class.classes_, "Probabilidad": pred.flatten()})
-                    fig = go.Figure(data=go.Scatterpolar(r=dfp['Probabilidad'], theta=dfp['Lesión'], fill='toself'))
-                    fig.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 1])), showlegend=False, height=350, margin=dict(l=40, r=40, t=40, b=40))
-                    st.plotly_chart(fig, use_container_width=True)
 
-                # Guardar en historial
+                    with res_col2:
+                        st.markdown("##### Distribución de Probabilidades")
+                        # CAMBIO: Se usa el gráfico de barras
+                        dfp = pd.DataFrame({"Lesión": le_class.classes_, "Probabilidad": pred.flatten()})
+                        dfp = dfp.set_index("Lesión").sort_values("Probabilidad", ascending=False)
+                        st.bar_chart(dfp)
+
+                # Guardar en historial usando el nombre correcto
                 st.session_state.history.append({
-                    'name': pred_name, 'timestamp': time.strftime('%Y-%m-%d %H:%M:%S'),
+                    'name': current_pred_name, 'timestamp': time.strftime('%Y-%m-%d %H:%M:%S'),
                     'original': original, 'model': model_choice, 'label': label,
                     'confidence': conf, 'meta': meta if meta else None
                 })
-                st.success("Análisis completado y guardado en el historial.")
+
+                # CAMBIO: Reiniciar el nombre para la siguiente predicción
+                st.session_state.pred_name = f"Pred_{time.strftime('%Y%m%d_%H%M%S')}"
+                
+                st.success(f'Análisis "{current_pred_name}" completado y guardado en el historial.')
+                st.balloons()
+                
+                # Forzamos un rerun para limpiar el formulario y actualizar el historial visualmente
+                time.sleep(2) # Pequeña pausa para que el usuario vea el mensaje de éxito
+                st.rerun()
 
 with tab_info:
-    # (El contenido de esta pestaña no ha cambiado)
     st.markdown("### 📚 Sobre la Aplicación")
     st.markdown("""
-    Esta app se trata de un TFG diseñado para mostrar las capacidades de los modelos de Deep Learning, específicamente Redes Neuronales Convolucionales (CNNs), en el campo de la dermatología. 
-    Además se utilizan modelos entrenados mediante técnicas de Aprendizaje Federado (FL).
-    
-    - **Modelo Híbrido:** Combina las características extraídas por una CNN de la imagen con metadatos tabulares (edad, sexo, localización, etc.) para mejorar la precisión contextual.
-    - **Tecnologías:** Python, TensorFlow/Keras, Scikit-learn, OpenCV, Streamlit, Plotly, Kaggle.
+    **Skin-AI** es un proyecto demostrativo para mostrar las capacidades de los modelos de Deep Learning en dermatología computacional, utilizando modelos entrenados con Aprendizaje Federado.
+    - **Tecnologías:** Python, TensorFlow/Keras, Scikit-learn, OpenCV, Streamlit.
     """)
-    st.warning("**Aviso Importante:** Esta herramienta es un TFG y **NO** debe ser utilizada para autodiagnóstico o como sustituto de una consulta médica profesional.")
+    st.warning("**Aviso Importante:** Esta herramienta es una prueba de concepto académica y **NO** debe ser utilizada para autodiagnóstico.")
