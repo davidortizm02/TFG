@@ -191,8 +191,6 @@ def preprocess_image_for_model(image_file, target_size=224):
 # Interfaz de Streamlit
 # =====================
 
-
-
 # Custom CSS for styling
 def local_css():
     st.markdown(
@@ -238,7 +236,7 @@ if st.session_state.history:
     with st.sidebar.expander("Detalles de la predicción", expanded=True):
         st.image(record['original'], use_container_width=True)
         st.markdown(f"**Nombre:** {record['name']}")
-        st.markdown(f"**Timestamp:** {record['timestamp']}")
+        st.markdown(f"**Fecha:** {record['timestamp']}")
         st.markdown(f"**Modelo:** {record['model']}")
         st.markdown(f"**Lesión:** {record['label']}")
         st.markdown(f"**Confianza:** {record['confidence']:.2%}")
@@ -259,13 +257,23 @@ except FileNotFoundError as e:
     st.stop()
 
 # Área de predicción
+# Área de predicción
 timestamp_default = time.strftime('%Y-%m-%d_%H-%M-%S')
 col_config, col_display = st.columns([1, 2], gap="large")
 with col_config:
     st.subheader("1. Configuración")
     model_choice = st.radio("Modelo:", ("Híbrido (imagen + metadatos)", "Solo imagen"))
     uploaded = st.file_uploader("Sube JPG/PNG:", type=["jpg", "jpeg", "png"])
-    pred_name = st.text_input("Nombre del registro:", f"Predicción_{timestamp_default}")
+
+    # Inicializamos una sola vez el pred_name en session_state
+    if 'pred_name' not in st.session_state:
+        st.session_state.pred_name = f"Predicción_{timestamp_default}"
+    # Usamos key="pred_name" para que Streamlit conserve el valor que escribas
+    pred_name = st.text_input(
+        "Nombre del registro:",
+        value=st.session_state.pred_name,
+        key="pred_name"
+    )
 
     # Metadatos dinámicos
     meta = {}
@@ -282,6 +290,7 @@ with col_config:
             "HAM_rosendahl","MSK4nan","HAM_vienna_dias"
         ])
     submitted = st.button("🔍 Realizar Predicción")
+
 
 with col_display:
     if uploaded and submitted:
