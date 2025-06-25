@@ -335,7 +335,7 @@ with tab_prediccion:
             meta = {}
             if model_choice.startswith("Híbrido"):
                 st.markdown("##### Metadatos del Paciente")
-                meta['edad'] = st.text_input("Edad:", key="edad")
+                meta['edad'] = st.number_input("Edad:", min_value=1, max_value=100, value=50, step=1)
                 meta['sexo'] = st.selectbox("Sexo:", ["male", "female", "unknown"])
                 meta['zona'] = st.selectbox("Zona anatómica:", ["anterior torso","head/neck","lateral torso","lower extremity","upper extremity","oral/genital","palms/soles","posterior torso","unknown"])
                 meta['dataset'] = st.selectbox("Fuente del dataset:", ["BCN_nan","HAM_vidir_molemax","HAM_vidir_modern","HAM_rosendahl","MSK4nan","HAM_vienna_dias"])
