@@ -384,7 +384,7 @@ with tab_prediccion:
                 label = le_class.inverse_transform([idx])[0]
 
                 # Mostrar Resultados (sin cambios en la visualización)
-                st.text_input(f"#### Resultados para:", key="pred_name")
+                st.text_input("Resultados para:", key="pred_name")
                 with st.container(border=True):
                     res_col1, res_col2 = st.columns(2)
                     with res_col1:
