@@ -385,18 +385,17 @@ with tab_prediccion:
 
                 st.markdown(f"#### Resultados para: *{current_pred_name}*")
                 with st.container(border=True):
-                    res_col1, res_col2 = st.columns([1, 2])
+                    res_col1, res_col2 = st.columns(2)
                     with res_col1:
                         st.metric(label="Diagnóstico Principal", value=label)
                         st.metric(label="Nivel de Confianza", value=f"{conf:.2%}")
-                        st.image(original, caption="Imagen Analizada", use_container_width=True)
-
                     with res_col2:
-                        st.markdown("##### Distribución de Probabilidades")
-                        # CAMBIO: Se usa el gráfico de barras
-                        dfp = pd.DataFrame({"Lesión": le_class.classes_, "Probabilidad": pred.flatten()})
-                        dfp = dfp.set_index("Lesión").sort_values("Probabilidad", ascending=False)
-                        st.bar_chart(dfp)
+                        st.image(original, caption="Imagen Analizada", use_container_width=True)
+                    
+                    dfp = pd.DataFrame({"Lesión": le_class.classes_, "Probabilidad": pred.flatten()})
+                    fig = go.Figure(data=go.Scatterpolar(r=dfp['Probabilidad'], theta=dfp['Lesión'], fill='toself'))
+                    fig.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 1])), showlegend=False, height=350, margin=dict(l=40, r=40, t=40, b=40))
+                    st.plotly_chart(fig, use_container_width=True)
 
                 # Guardar en historial usando el nombre correcto
                 st.session_state.history.append({
