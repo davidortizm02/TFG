@@ -9,6 +9,7 @@ from tensorflow.keras.applications.efficientnet_v2 import preprocess_input as ef
 import joblib
 import json
 
+import time
 from skimage.feature import graycomatrix, graycoprops, local_binary_pattern
 from skimage.morphology import opening, closing, disk
 from skimage.measure import label, regionprops
@@ -212,7 +213,7 @@ st.set_page_config(
 local_css()
 
 # Sidebar: logo y historial
-st.sidebar.image("assets/logo.jpg", use_container_width=True)
+st.sidebar.image("assets/logo.png", use_container_width=True)
 st.sidebar.title("Historial de Predicciones")
 if 'history' not in st.session_state:
     st.session_state.history = []
