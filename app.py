@@ -368,7 +368,7 @@ with col_display:
                 st.success(f"Predicción «{pred_name}» guardada correctamente.")
 
     else:
-        st.info("Completa el formulario y pulsa 'Realizar Predicción' para guardar.")
+        st.info("Completa el formulario y pulsa 'Realizar Predicción' para clasificar la lesión.")
 
 st.markdown("---")
 st.caption("TFG – Interfaz mejorada y guardado de historial.")
