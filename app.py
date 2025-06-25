@@ -405,7 +405,7 @@ with tab_prediccion:
                 })
 
                 # CAMBIO: Reiniciar el nombre para la siguiente predicción
-                st.session_state.pred_name = f"Pred_{time.strftime('%Y%m%d_%H%M%S')}"
+                #st.session_state.pred_name = f"Pred_{time.strftime('%Y%m%d_%H%M%S')}"
                 
                 st.success(f'Análisis "{current_pred_name}" completado y guardado en el historial.')
                 
