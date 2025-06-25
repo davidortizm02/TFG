@@ -231,29 +231,32 @@ if uploaded and submit:
     with st.spinner('Procesando...'):
         # Preprocesar imagen
         img_batch, img_vis = preprocess_image_for_model(uploaded)
-        # Mostrar original vs preprocesada
         original = Image.open(uploaded).convert('RGB')
-        with st.expander("📷 Original vs Preprocesada", expanded=True):
-            c_o, c_p = st.columns(2)
-            c_o.image(original, caption="Original", width=200)
-            c_p.image(img_vis, caption="Preprocesada 224×224", width=200)
 
-        # Si es híbrido, extraer features y metadatos
+        # Mostrar imágenes pre y post
+        with st.expander("📷 Visualización de Imágenes", expanded=True):
+            if model_choice == "Híbrido (imagen + metadatos)":
+                cols = st.columns(3, gap='large')
+                cols[0].image(original, caption="Original", width=150)
+                cols[1].image(img_vis, caption="Preprocesada", width=150)
+                # extraer máscara para híbrido
+                gray = cv2.cvtColor(img_vis, cv2.COLOR_RGB2GRAY)
+                _, mask = extract_features_from_array(img_vis, gray)
+                cols[2].image(mask, caption="Máscara de lesión", width=150)
+                st.dataframe(pd.DataFrame([_]).fillna("NaN"))
+            else:
+                cols = st.columns([1,1], gap='small')
+                cols[0].image(original, caption="Original", width=300)
+                cols[1].image(img_vis, caption="Preprocesada 224×224", width=300)
+
+        # Procesar predicción
         if model_choice == "Híbrido (imagen + metadatos)":
-            gray = cv2.cvtColor(img_vis, cv2.COLOR_RGB2GRAY)
+            # reutilizamos gray y mask llamando a extract_features para features numéricas
             feats_raw, mask = extract_features_from_array(img_vis, gray)
-
-            # Mostrar segmentación y features
-            with st.expander("🔍 Segmentación y Features", expanded=True):
-                st.dataframe(pd.DataFrame([feats_raw]).fillna("NaN"))
-                # Mostrar máscara más pequeña
-                st.image(mask, caption="Máscara de lesión", width=200)
-
             # Preparar DataFrame metadatos
             if edad <= 35: grp = "young"
             elif edad <= 65: grp = "adult"
             else: grp = "senior"
-
             df_meta = pd.DataFrame([{
                 "age_approx": edad,
                 "sex": sexo,
@@ -269,7 +272,6 @@ if uploaded and submit:
             model = model_img
             inputs = img_batch
 
-        # Predicción
         pred = model.predict(inputs, verbose=0)
         idx = int(np.argmax(pred, axis=1)[0])
         conf = float(np.max(pred))
