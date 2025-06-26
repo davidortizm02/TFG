@@ -305,7 +305,7 @@ tab_inicio, tab_prediccion, tab_info = st.tabs(["🏠 Inicio", "🧪 Nueva Predi
 with tab_inicio:
     st.markdown("### ¡Bienvenido a Skin-AI!")
     st.markdown("""
-    Esta aplicación utiliza un modelo de Red Neuronal Convolucional para analizar imágenes de lesiones cutáneas y predecir a cuál de las siguientes categorías podría pertenecer:
+    Esta aplicación utiliza modelos de Redes Neuronales capaces de analizar imágenes y registros de lesiones cutáneas para predecir a cuál de las siguientes categorías podría pertenecer:
     - Melanoma (MEL).
     - Nevus melanocítico (NV).
     - Carcinoma de células basales (BCC).
@@ -412,7 +412,19 @@ with tab_prediccion:
 with tab_info:
     st.markdown("### 📚 Sobre la Aplicación")
     st.markdown("""
-    **Skin-AI** es un proyecto demostrativo para mostrar las capacidades de los modelos de Deep Learning en dermatología computacional, utilizando modelos entrenados con Aprendizaje Federado.
-    - **Tecnologías:** Python, TensorFlow/Keras, Scikit-learn, OpenCV, Streamlit.
+    **Skin-AI** es un Trabajo de Fin de Grado realizado por un estudiante de la Escuela Superior de Informática de Albacete para mostrar las capacidades de los modelos de Deep Learning en dermatología computacional, 
+    utilizando modelos entrenados con Aprendizaje Federado.
+    En concreto, estos modelos han sido entrenados a partir de las imágenes que proporciona el ISIC (International Skin Imaging Collaboration), en concreto la competición de 2019. 
+    Este conjunto consta con mas de 23.000 imágenes dermatológicas provenientes de tres hospitales diferentes. Debido a la procedencia de las imágenes, permite que se desarrollen modelos de IA 
+    basados en Aprendizaje Federado, es decir, se obtienen modelos entrenados sin que los datos salgan de los propios hospitales. Además de modelos basados en esta técncia de IA, también se han implementado
+    modelos entrenados con el conjunto global de los datos con el fin de aportar mayor posibilidad de elección.            
+    
+    A continuación se expone el porcentaje de acierto de cada modelo utilizado en la app medido en base a la precisión balanceada entre las clases.
+    - Modelo Híbrido Federado: 
+    - Modelo Híbrido Global:
+    - Modelo Imágenes Federado:
+    - Modelo imágenes Global:
+                
+    - **Tecnologías:** Python, TensorFlow/Keras, Scikit-learn, OpenCV, Kaggle, Streamlit.
     """)
-    st.warning("**Aviso Importante:** Esta herramienta es una TFG y **NO** debe ser utilizada para autodiagnóstico o como sustituto de una consulta médica profesional.")
+    st.warning("**Aviso Importante:** Esta herramienta es un TFG y **NO** debe ser utilizada para autodiagnóstico o como sustituto de una consulta médica profesional.")
