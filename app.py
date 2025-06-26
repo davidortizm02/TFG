@@ -337,7 +337,7 @@ with tab_prediccion:
                 "Sube una imagen:", 
                 type=["jpg", "jpeg", "png"], 
                 label_visibility="visible",
-                key=f"uploader_{st.session_state.uploader_key}"
+                
             )
             
             meta = {}
