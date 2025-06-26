@@ -277,6 +277,16 @@ if 'resources_loaded' not in st.session_state:
 
 # --- BARRA LATERAL (SIDEBAR) ---
 with st.sidebar:
+    st.markdown(
+        """
+        <style>
+        section[data-testid="stSidebar"] div:first-child {
+            padding-top: 1rem;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
     st.markdown("<h1 style='text-align: center;'>📋 Historial</h1>", unsafe_allow_html=True)
     if st.button("🗑️ Limpiar Historial"):
         st.session_state.history = []
@@ -296,6 +306,7 @@ with st.sidebar:
                     st.markdown("**Metadatos:**")
                     for k, v in record['meta'].items():
                         st.markdown(f"- **{k.capitalize()}:** {v}")
+
 
 # --- CONTENIDO PRINCIPAL ---
 st.title("🩺 Skin-AI: Asistente de Clasificación de Lesiones Cutáneas")
@@ -444,7 +455,7 @@ with tab_info:
 
     st.markdown("#### Rendimiento de los Modelos")
     with st.container(border=True):
-        st.markdown("A continuación se expone el porcentaje de acierto de cada modelo, medido en base a la precisión balanceada entre clases (los valores son ejemplos):")
+        st.markdown("A continuación se expone el porcentaje de acierto de cada modelo, medido en base a la precisión balanceada entre clases:")
         # --- MEJORA VISUAL: Tabla para las métricas ---
         col1, col2 = st.columns(2)
         with col1:
