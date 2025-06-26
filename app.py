@@ -281,7 +281,7 @@ with st.sidebar:
         """
         <style>
         section[data-testid="stSidebar"] div:first-child {
-            padding-top: 1rem;
+            padding-top: 0.1rem;
         }
         </style>
         """,
