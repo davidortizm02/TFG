@@ -190,9 +190,6 @@ def preprocess_image_for_model(image_file, target_size=224):
 # =====================
 # Interfaz de Streamlit
 # =====================
-# =====================More actions
-# Interfaz de Streamlit
-# =====================
 
 
 # --- ESTILO VISUAL Y CSS ---
@@ -258,12 +255,15 @@ st.set_page_config(
 
 load_custom_css()
 
+
 # Inicialización del estado de la sesión para el historial y el nombre de la predicción
 if 'history' not in st.session_state:
     st.session_state.history = []
 if 'pred_name' not in st.session_state:
     st.session_state.pred_name = f"Pred_{time.strftime('%Y%m%d_%H%M%S')}"
-
+if 'uploader_key' not in st.session_state:
+    st.session_state.uploader_key = 0
+    
 # --- CARGA DE RECURSOS (MODELO, ETC.) ---
 if 'resources_loaded' not in st.session_state:
     try:
@@ -415,8 +415,10 @@ with tab_prediccion:
                             'confidence': conf,
                             'meta': meta if meta else None
                         })
+                        
+                        st.session_state.uploader_key += 1
                         st.success(f'Análisis "{current_pred_name}" completado y guardado en el historial.')
-                        st.experimental_rerun()  # CAMBIO: forzar rerun tras guardar
+                        st.experimental_rerun()
 
         else:
             # --- MEJORA: Mostrar la imagen cargada antes de predecir ---
