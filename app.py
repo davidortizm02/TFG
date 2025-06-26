@@ -261,8 +261,6 @@ if 'history' not in st.session_state:
     st.session_state.history = []
 if 'pred_name' not in st.session_state:
     st.session_state.pred_name = f"Pred_{time.strftime('%Y%m%d_%H%M%S')}"
-if 'uploader_key' not in st.session_state:
-    st.session_state.uploader_key = 0
     
 # --- CARGA DE RECURSOS (MODELO, ETC.) ---
 if 'resources_loaded' not in st.session_state:
@@ -405,20 +403,15 @@ with tab_prediccion:
                         fig = go.Figure(data=go.Scatterpolar(r=dfp['Probabilidad'], theta=dfp['Lesión'], fill='toself'))
                         fig.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 1])), showlegend=False, height=350, margin=dict(l=40, r=40, t=40, b=40))
                         st.plotly_chart(fig, use_container_width=True)
-                        # Guardar en historial
-                        st.session_state.history.append({
-                            'name': current_pred_name,
-                            'timestamp': time.strftime('%Y-%m-%d %H:%M:%S'),
-                            'original': original,
-                            'model': model_choice,
-                            'label': label,
-                            'confidence': conf,
-                            'meta': meta if meta else None
-                        })
-                        
-                        st.session_state.uploader_key += 1
-                        st.success(f'Análisis "{current_pred_name}" completado y guardado en el historial.')
-                        st.experimental_rerun()
+
+                    # Guardar en historial usando el nombre correcto
+                    st.session_state.history.append({
+                        'name': current_pred_name, 'timestamp': time.strftime('%Y-%m-%d %H:%M:%S'),
+                        'original': original, 'model': model_choice, 'label': label,
+                        'confidence': conf, 'meta': meta if meta else None
+                    })
+
+                    st.success(f'Análisis "{current_pred_name}" completado y guardado en el historial.')
 
         else:
             # --- MEJORA: Mostrar la imagen cargada antes de predecir ---
