@@ -321,7 +321,7 @@ with tab_inicio:
     3.  Asigna un nombre a tu predicción para guardarla en el historial.
     4.  Haz clic en "Realizar Predicción" y analiza los resultados.
     """)
-    st.warning("**Aviso Importante:** Esta herramienta es una TFG y **NO** debe ser utilizada para autodiagnóstico o como sustituto de una consulta médica profesional.")
+    st.warning("**Aviso Importante:** Esta herramienta es un TFG y **NO** debe ser utilizada para autodiagnóstico o como sustituto de una consulta médica profesional.")
 
 with tab_prediccion:
     col_config, col_display = st.columns([0.4, 0.6], gap="large")
