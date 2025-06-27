@@ -41,9 +41,9 @@ MIN_LESION_AREA    = 100
 def load_all_resources():
     with open("feature_columns.json", "r") as f:
         feature_cols = json.load(f)
-    preprocessor = joblib.load("preprocessor_metadata.pkl")
-    label_encoder = joblib.load("labelencoder_class.pkl")
-    model_hybrid = load_model("modelo_hibrido_entrenadoCW.keras", compile=False)
+    preprocessor = joblib.load("preprocessor_metadata_0,734.pkl")
+    label_encoder = joblib.load("labelencoder_class_0,734.pkl")
+    model_hybrid = load_model("modelo_hibrido_entrenadoCW_0,734.keras", compile=False)
     model_img    = load_model("modelo_imagenes_entrenado2.keras", compile=False)
     return feature_cols, preprocessor, label_encoder, model_hybrid, model_img
 
