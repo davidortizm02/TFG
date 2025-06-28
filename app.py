@@ -307,7 +307,7 @@ with tab_inicio:
     st.markdown("### ¡Bienvenido a Skin-AI!")
     st.markdown("""
     Esta aplicación utiliza modelos de Redes Neuronales capaces de analizar imágenes y registros de lesiones cutáneas para predecir a cuál de las siguientes categorías podría pertenecer:
-    - **Melanoma (MEL)**: Tumor maligno de células pigmentadas, muy peligroso.
+    - **Melanoma (MEL)**: Tumor maligno de células pigmentadas; muy peligroso.
     - **Nevus melanocítico (NV)**: Lunar benigno común, generalmente sin riesgo.
     - **Carcinoma de células basales (BCC)**: Cáncer de piel maligno de crecimiento lento.
     - **Queratosis actínica (AK)**: Lesión precancerosa causada por daño solar.
@@ -332,12 +332,12 @@ with tab_prediccion:
         with st.container(border=True):
             model_choice = st.radio("Selecciona el modelo:", ("Híbrido (imagen + metadatos)", "Solo imagen"), horizontal=True)
             
-            # --- CAMBIO 1: key para persistir el uploader ---
+            # --- CAMBIO: Usamos una key única que se actualiza para permitir "limpiar" el uploader ---
             uploaded = st.file_uploader(
                 "Sube una imagen:", 
                 type=["jpg", "jpeg", "png"], 
-                key="uploaded_image",
                 label_visibility="visible",
+                
             )
             
             meta = {}
@@ -348,85 +348,84 @@ with tab_prediccion:
                 meta['zona'] = st.selectbox("Zona anatómica:", ["anterior torso","head/neck","lateral torso","lower extremity","upper extremity","oral/genital","palms/soles","posterior torso","unknown"])
                 meta['dataset'] = st.selectbox("Fuente del dataset:", ["BCN_nan","HAM_vidir_molemax","HAM_vidir_modern","HAM_rosendahl","MSK4nan","HAM_vienna_dias"])
             
+            # El text_input sigue vinculado al session_state para capturar el nombre
             st.text_input("Nombre para este registro:", key="pred_name")
+            
+            # El botón de predicción, deshabilitado si no hay imagen
             submitted = st.button("🔍 Realizar Predicción", use_container_width=True, disabled=(uploaded is None))
 
-
-with col_display:
-    st.markdown("### 2. Visualización y Resultados")
+    with col_display:
+        st.markdown("### 2. Visualización y Resultados")
         
-    if submitted and uploaded:
-        current_pred_name = st.session_state.pred_name
+        # --- LÓGICA DE PREDICCIÓN Y GUARDADO (REESTRUCTURADA) ---
+        if submitted and uploaded:
+            current_pred_name = st.session_state.pred_name
+            
+            # Evitar nombres duplicados en el historial
+            if any(record['name'] == current_pred_name for record in st.session_state.history):
+                st.error(f"El nombre '{current_pred_name}' ya existe en el historial. Por favor, elige un nombre único.")
+            else:
+                 with st.spinner(f'🧠 Analizando "{current_pred_name}"...'):
+                    original = Image.open(uploaded).convert('RGB')
+                    img_batch, img_vis = preprocess_image_for_model(uploaded)
 
-        if any(r['name'] == current_pred_name for r in st.session_state.history):
-            st.error(f"El nombre '{current_pred_name}' ya existe en el historial. Por favor, elige un nombre único.")
+                    if model_choice.startswith("Híbrido"):
+                        img_vis_array = np.array(img_vis)
+                        gray = cv2.cvtColor(img_vis_array, cv2.COLOR_RGB2GRAY)
+                        feats_raw, _ = extract_features_from_array(img_vis_array, gray)
+                        grp = ('young' if meta['edad'] <= 35 else 'adult' if meta['edad'] <= 65 else 'senior')
+                        age_sex_interaction = f"{meta['sexo']}_{grp}"
+                        full_meta_dict = {"age_approx": meta['edad'], "sex": meta['sexo'], "anatom_site_general": meta['zona'], "dataset": meta['dataset'], "age_sex_interaction": age_sex_interaction, **feats_raw}
+                        df_meta = pd.DataFrame([full_meta_dict])
+                        X_meta = st.session_state.resources["preproc"].transform(df_meta)
+                        inputs = [img_batch, X_meta]
+                        model = st.session_state.resources["model_hybrid"]
+                    else:
+                        inputs = img_batch
+                        model = st.session_state.resources["model_img"]
+
+                    le_class = st.session_state.resources["le_class"]
+                    pred = model.predict(inputs, verbose=0)
+                    idx = int(np.argmax(pred, axis=1)[0])
+                    conf = float(np.max(pred))
+                    label = le_class.inverse_transform([idx])[0]
+
+                    st.markdown(f"#### Resultados para: *{current_pred_name}*")
+                    with st.container(border=True):
+                        res_col1, res_col2 = st.columns(2)
+                        with res_col1:
+                            st.metric(label="Diagnóstico Principal", value=label)
+                            st.metric(label="Nivel de Confianza", value=f"{conf:.2%}")
+                        with res_col2:
+                            st.image(original, caption="Imagen Analizada", use_container_width=True)
+
+                        dfp = pd.DataFrame({"Lesión": le_class.classes_, "Probabilidad": pred.flatten()})
+                        fig = go.Figure(data=go.Scatterpolar(r=dfp['Probabilidad'], theta=dfp['Lesión'], fill='toself'))
+                        fig.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 1])), showlegend=False, height=350, margin=dict(l=40, r=40, t=40, b=40))
+                        st.plotly_chart(fig, use_container_width=True)
+
+                    # Guardar en historial usando el nombre correcto
+                    st.session_state.history.append({
+                        'name': current_pred_name, 'timestamp': time.strftime('%Y-%m-%d %H:%M:%S'),
+                        'original': original, 'model': model_choice, 'label': label,
+                        'confidence': conf, 'meta': meta if meta else None
+                    })
+
+                    st.success(f'Análisis "{current_pred_name}" completado y guardado en el historial.')
+
         else:
-            with st.spinner(f'🧠 Analizando "{current_pred_name}"...'):
-                original = Image.open(uploaded).convert('RGB')
-                img_batch, img_vis = preprocess_image_for_model(uploaded)
-
-                if model_choice.startswith("Híbrido"):
-                    img_vis_array = np.array(img_vis)
-                    gray = cv2.cvtColor(img_vis_array, cv2.COLOR_RGB2GRAY)
-                    feats_raw, _ = extract_features_from_array(img_vis_array, gray)
-                    grp = ('young' if meta['edad'] <= 35 else 'adult' if meta['edad'] <= 65 else 'senior')
-                    age_sex_interaction = f"{meta['sexo']}_{grp}"
-                    full_meta_dict = {"age_approx": meta['edad'], "sex": meta['sexo'], "anatom_site_general": meta['zona'], "dataset": meta['dataset'], "age_sex_interaction": age_sex_interaction, **feats_raw}
-                    df_meta = pd.DataFrame([full_meta_dict])
-                    X_meta = st.session_state.resources["preproc"].transform(df_meta)
-                    inputs = [img_batch, X_meta]
-                    model = st.session_state.resources["model_hybrid"]
-                else:
-                    inputs = img_batch
-                    model = st.session_state.resources["model_img"]
-
-                le_class = st.session_state.resources["le_class"]
-                pred = model.predict(inputs, verbose=0)
-                idx = int(np.argmax(pred, axis=1)[0])
-                conf = float(np.max(pred))
-                label = le_class.inverse_transform([idx])[0]
-
-                st.markdown(f"#### Resultados para: *{current_pred_name}*")
-                with st.container(border=True):
-                    res_col1, res_col2 = st.columns(2)
-                    with res_col1:
-                        st.metric(label="Diagnóstico Principal", value=label)
-                        st.metric(label="Nivel de Confianza", value=f"{conf:.2%}")
-                    with res_col2:
-                        st.image(original, caption="Imagen Analizada", use_container_width=True)
-
-                    dfp = pd.DataFrame({"Lesión": le_class.classes_, "Probabilidad": pred.flatten()})
-                    fig = go.Figure(data=go.Scatterpolar(r=dfp['Probabilidad'], theta=dfp['Lesión'], fill='toself'))
-                    fig.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 1])), showlegend=False, height=350, margin=dict(l=40, r=40, t=40, b=40))
-                    st.plotly_chart(fig, use_container_width=True)
-
-                # Guardar en historial usando el nombre correcto
-                st.session_state.history.append({
-                    'name': current_pred_name,
-                    'timestamp': time.strftime('%Y-%m-%d %H:%M:%S'),
-                    'original': original,
-                    'model': model_choice,
-                    'label': label,
-                    'confidence': conf,
-                    'meta': meta if meta else None
-                })
-
-                st.success(f'Análisis "{current_pred_name}" completado y guardado en el historial.')
-                st.experimental_rerun()
-
-    else:
-        # --- MEJORA: Mostrar la imagen cargada antes de predecir ---
-        if uploaded:
-            st.image(uploaded, caption="Imagen cargada. Lista para analizar.", use_container_width=True)
-        else:
-                # --- MEJORA VISUAL: Placeholder más amigable ---
-            st.markdown("""
-            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 400px; background-color: rgba(255, 255, 255, 0.5); border-radius: 15px; border: 2px dashed #c3cfe2;">
-                <p style="font-size: 24px;">🖼️</p>
-                <p style="font-weight: 600; color: #555;">Esperando imagen</p>
-                <p style="color: #777; text-align: center;">Sube una imagen de una lesión cutánea en el panel de la izquierda para comenzar el análisis.</p>
-            </div>
-            """, unsafe_allow_html=True)
+            # --- MEJORA: Mostrar la imagen cargada antes de predecir ---
+            if uploaded:
+                st.image(uploaded, caption="Imagen cargada. Lista para analizar.", use_container_width=True)
+            else:
+                 # --- MEJORA VISUAL: Placeholder más amigable ---
+                st.markdown("""
+                <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 400px; background-color: rgba(255, 255, 255, 0.5); border-radius: 15px; border: 2px dashed #c3cfe2;">
+                    <p style="font-size: 24px;">🖼️</p>
+                    <p style="font-weight: 600; color: #555;">Esperando imagen</p>
+                    <p style="color: #777; text-align: center;">Sube una imagen de una lesión cutánea en el panel de la izquierda para comenzar el análisis.</p>
+                </div>
+                """, unsafe_allow_html=True)
 
 with tab_info:
     st.markdown("### 📚 Sobre la Aplicación")
