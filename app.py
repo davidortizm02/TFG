@@ -401,7 +401,7 @@ with col_display:
                     st.plotly_chart(fig, use_container_width=True)
 
                 # Guardar en historial usando el nombre correcto
-                 st.session_state.history.append({
+                st.session_state.history.append({
                     'name': current_pred_name,
                     'timestamp': time.strftime('%Y-%m-%d %H:%M:%S'),
                     'original': original,
