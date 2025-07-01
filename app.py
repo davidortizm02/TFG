@@ -448,7 +448,7 @@ with tab_prediccion:
             else:
                  with st.spinner(f'🧠 Analizando "{current_pred_name}"...'):
                     original = Image.open(uploaded).convert('RGB')
-                    img_batch, img_vis = preprocess_image_for_model(uploaded)
+                    img_batch, img_vis = preprocess_image_for_model(uploaded,use_hair=use_hair)
 
                     if model_choice.startswith("Híbrido"):
                         img_vis_array = np.array(img_vis)
