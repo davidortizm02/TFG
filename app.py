@@ -415,7 +415,7 @@ with tab_prediccion:
         with st.container(border=True):
             model_choice = st.radio("Selecciona el modelo:", ("Híbrido (imagen + metadatos)", "Solo imagen"), horizontal=True)
             # Checkbox para eliminar pelo
-            use_hair = st.checkbox("Usar algoritmo de eliminación de pelo", value=False)
+            use_hair = st.checkbox("Eliminar el pelo de la imagen", value=False)
             # --- CAMBIO: Usamos una key única que se actualiza para permitir "limpiar" el uploader ---
             uploaded = st.file_uploader(
                 "Sube una imagen:", 
