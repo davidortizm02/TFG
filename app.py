@@ -149,42 +149,132 @@ def extract_features_from_array(img_rgb, gray):
 # =====================
 # Funciones de preprocesamiento de la imagen para el modelo
 # =====================
+def center_crop_to_square(img: np.ndarray) -> np.ndarray:
+    h, w = img.shape[:2]
+    if h == w:
+        return img.copy()
+    if h > w:
+        diff = h - w
+        top = diff // 2
+        return img[top : top + w, :]
+    else:
+        diff = w - h
+        left = diff // 2
+        return img[:, left : left + h]
 
-def center_crop_to_square(img):
-    h,w = img.shape[:2]
-    if h==w: return img.copy()
-    if h>w:
-        d,h_diff = h-w, (h-w)//2
-        return img[h_diff:h_diff+w, :]
-    d,w_diff = w-h, (w-h)//2
-    return img[:, w_diff:w_diff+h]
 
-
-def crop_non_black_region(img, thresh=10):
+def crop_non_black_region(img: np.ndarray, thresh: int = 10) -> np.ndarray:
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     _, mask = cv2.threshold(gray, thresh, 255, cv2.THRESH_BINARY)
-    ys,xs = np.where(mask)
-    if ys.size ==0: return img
-    return img[ys.min():ys.max()+1, xs.min():xs.max()+1]
+    ys, xs = np.where(mask)
+    if ys.size == 0 or xs.size == 0:
+        return img
+    y0, y1 = ys.min(), ys.max()
+    x0, x1 = xs.min(), xs.max()
+    return img[y0 : y1 + 1, x0 : x1 + 1]
 
 
-def preprocess_image_for_model(image_file, target_size=224):
-    # Carga y conversión a BGR
-    img = Image.open(image_file).convert('RGB')
-    arr = np.array(img)
+def crop_and_resize_to_224(
+    img: np.ndarray,
+    target_size: int = 224,
+    interpolation=cv2.INTER_LINEAR,
+) -> np.ndarray:
+    square = center_crop_to_square(img)
+    return cv2.resize(square, (target_size, target_size), interpolation=interpolation)
+
+
+def remove_hair_optimized(
+    image: np.ndarray,
+    blackhat_kernel_size=(11, 11),
+    threshold_percentile=70,
+    morph_open_kernel_size=(3, 3),
+    morph_close_kernel_size=(5, 5),
+    min_hair_length_px=30,
+    final_dilate_kernel_size=(5, 5),
+    final_dilate_iterations=1,
+    inpaint_radius=5,
+    inpaint_method='TELEA',
+) -> np.ndarray:
+    if image is None or image.ndim != 3 or image.shape[2] != 3:
+        return image
+
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    kernel_bh = cv2.getStructuringElement(cv2.MORPH_RECT, blackhat_kernel_size)
+    blackhat = cv2.morphologyEx(gray, cv2.MORPH_BLACKHAT, kernel_bh)
+
+    thresh_val = np.percentile(blackhat, threshold_percentile)
+    if thresh_val == 0 and np.any(blackhat > 0):
+        thresh_val = np.mean(blackhat[blackhat > 0]) / 2
+    elif thresh_val == 0:
+        thresh_val = 10
+
+    _, hair_mask = cv2.threshold(blackhat, thresh_val, 255, cv2.THRESH_BINARY)
+    hair_mask = cv2.morphologyEx(
+        hair_mask.astype(np.uint8),
+        cv2.MORPH_OPEN,
+        cv2.getStructuringElement(cv2.MORPH_ELLIPSE, morph_open_kernel_size),
+    )
+    hair_mask = cv2.morphologyEx(
+        hair_mask,
+        cv2.MORPH_CLOSE,
+        cv2.getStructuringElement(cv2.MORPH_ELLIPSE, morph_close_kernel_size),
+    )
+
+    if not np.any(hair_mask):
+        return image.copy()
+
+    skel = img_as_ubyte(skeletonize(hair_mask // 255))
+    num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(skel, connectivity=8)
+
+    refined = np.zeros_like(skel)
+    for i in range(1, num_labels):
+        if stats[i, cv2.CC_STAT_AREA] >= min_hair_length_px:
+            refined[labels == i] = 255
+
+    if not np.any(refined):
+        return image.copy()
+
+    final_mask = cv2.dilate(
+        refined,
+        cv2.getStructuringElement(cv2.MORPH_ELLIPSE, final_dilate_kernel_size),
+        iterations=final_dilate_iterations,
+    )
+    flag = cv2.INPAINT_TELEA if inpaint_method.upper() == 'TELEA' else cv2.INPAINT_NS
+    return cv2.inpaint(image, final_mask, inpaint_radius, flag)
+
+from PIL import Image
+import numpy as np
+import cv2
+from utils import (
+    crop_non_black_region,
+    crop_and_resize_to_224,
+    remove_hair_optimized,
+    effnet_preprocess
+)
+
+def preprocess_image_for_model(image_file, target_size=224, use_hair: bool = False):
+   
+    # 1) Leer y convertir a BGR
+    pil = Image.open(image_file).convert("RGB")
+    arr = np.array(pil)
     bgr = cv2.cvtColor(arr, cv2.COLOR_RGB2BGR)
-    # Elimina fondo negro y recorta al cuadrado
-    crop = crop_non_black_region(bgr, thresh=10)
-    square = center_crop_to_square(crop)
-    resized = cv2.resize(square, (target_size, target_size), interpolation=cv2.INTER_LINEAR)
-    # Convertir BGR a RGB para visualización
-    rgb = cv2.cvtColor(resized, cv2.COLOR_BGR2RGB)
-    # Preprocesar para EfficientNetV2
-    img_array = np.expand_dims(rgb, axis=0).astype(np.float32)
+
+    # 2) Recortar zona no negra y centrar/resize al cuadrado
+    cropped = crop_non_black_region(bgr, thresh=10)
+    square = crop_and_resize_to_224(cropped, target_size=target_size)
+
+    # 3) Opcional: eliminar pelo
+    if use_hair:
+        square = remove_hair_optimized(square)
+
+    # 4) Pasar a RGB para mostrar
+    rgb_vis = cv2.cvtColor(square, cv2.COLOR_BGR2RGB).astype(np.uint8)
+
+    # 5) Preparar batch para EfficientNetV2
+    img_array = np.expand_dims(rgb_vis, axis=0).astype(np.float32)
     img_array = effnet_preprocess(img_array)
-    return img_array, rgb.astype(np.uint8)
 
-
+    return img_array, rgb_vis
 
 
 # =====================
@@ -331,7 +421,8 @@ with tab_prediccion:
         st.markdown("### 1. Carga y Configuración")
         with st.container(border=True):
             model_choice = st.radio("Selecciona el modelo:", ("Híbrido (imagen + metadatos)", "Solo imagen"), horizontal=True)
-            
+            # Checkbox para eliminar pelo
+            use_hair = st.checkbox("Usar algoritmo de eliminación de pelo", value=False)
             # --- CAMBIO: Usamos una key única que se actualiza para permitir "limpiar" el uploader ---
             uploaded = st.file_uploader(
                 "Sube una imagen:", 
@@ -342,7 +433,7 @@ with tab_prediccion:
             
             meta = {}
             if model_choice.startswith("Híbrido"):
-                st.markdown("##### Metadatos del Paciente")
+                st.markdown("##### Datos del Paciente")
                 meta['edad'] = st.number_input("Edad:", min_value=1, max_value=100, value=50, step=1)
                 meta['sexo'] = st.selectbox("Sexo:", ["male", "female", "unknown"])
                 meta['zona'] = st.selectbox("Zona anatómica:", ["anterior torso","head/neck","lateral torso","lower extremity","upper extremity","oral/genital","palms/soles","posterior torso","unknown"])
@@ -397,7 +488,7 @@ with tab_prediccion:
                             st.metric(label="Diagnóstico Principal", value=label)
                             st.metric(label="Nivel de Confianza", value=f"{conf:.2%}")
                         with res_col2:
-                            st.image(original, caption="Imagen Analizada", use_container_width=True)
+                            st.image(img_vis, caption="Imagen Analizada", use_container_width=True)
 
                         dfp = pd.DataFrame({"Lesión": le_class.classes_, "Probabilidad": pred.flatten()})
                         fig = go.Figure(data=go.Scatterpolar(r=dfp['Probabilidad'], theta=dfp['Lesión'], fill='toself'))
