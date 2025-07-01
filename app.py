@@ -14,6 +14,9 @@ from skimage.feature import graycomatrix, graycoprops, local_binary_pattern
 from skimage.morphology import opening, closing, disk
 from skimage.measure import label, regionprops
 import plotly.graph_objects as go
+
+from skimage.morphology import skeletonize
+from skimage import img_as_ubyte
 # ——————————————————————————————
 # Parámetros globales y configuración
 # ——————————————————————————————
