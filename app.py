@@ -242,16 +242,6 @@ def remove_hair_optimized(
     flag = cv2.INPAINT_TELEA if inpaint_method.upper() == 'TELEA' else cv2.INPAINT_NS
     return cv2.inpaint(image, final_mask, inpaint_radius, flag)
 
-from PIL import Image
-import numpy as np
-import cv2
-from utils import (
-    crop_non_black_region,
-    crop_and_resize_to_224,
-    remove_hair_optimized,
-    effnet_preprocess
-)
-
 def preprocess_image_for_model(image_file, target_size=224, use_hair: bool = False):
    
     # 1) Leer y convertir a BGR
