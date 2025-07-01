@@ -188,9 +188,9 @@ def crop_and_resize_to_224(
 
 def remove_hair_optimized(
     image: np.ndarray,
-    blackhat_kernel_size=(11, 11),
+    blackhat_kernel_size=(15, 15),
     threshold_percentile=70,
-    morph_open_kernel_size=(3, 3),
+    morph_open_kernel_size=(5, 5),
     morph_close_kernel_size=(5, 5),
     min_hair_length_px=30,
     final_dilate_kernel_size=(5, 5),
