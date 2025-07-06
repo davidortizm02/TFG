@@ -48,7 +48,8 @@ def load_all_resources():
     label_encoder = joblib.load("labelencoder_class_0,734.pkl")
     model_hybrid = load_model("modelo_hibrido_entrenadoCW_0,734.keras", compile=False)
     model_img    = load_model("modelo_imagenes_entrenado2.keras", compile=False)
-    return feature_cols, preprocessor, label_encoder, model_hybrid, model_img
+    model_fl    = load_model("modelo_hibrido_federado.keras", compile=False)
+    return feature_cols, preprocessor, label_encoder, model_hybrid, model_img, model_fl
 
 # =====================
 # Funciones de segmentación y extracción de features
@@ -351,7 +352,7 @@ if 'resources_loaded' not in st.session_state:
         _, preproc, le_class, model_hybrid, model_img = load_all_resources()
         st.session_state.resources = {
             "preproc": preproc, "le_class": le_class,
-            "model_hybrid": model_hybrid, "model_img": model_img
+            "model_hybrid": model_hybrid, "model_img": model_img, "model_fl": model_fl
         }
         st.session_state.resources_loaded = True
     except FileNotFoundError as e:
@@ -413,7 +414,7 @@ with tab_prediccion:
     with col_config:
         st.markdown("### 1. Carga y Configuración")
         with st.container(border=True):
-            model_choice = st.radio("Selecciona el modelo:", ("Híbrido (imagen + metadatos)", "Solo imagen"), horizontal=True)
+            model_choice = st.radio("Selecciona el modelo:", ("Híbrido (imagen + metadatos)", "Solo imagen", "Federado"), horizontal=True)
             # Checkbox para eliminar pelo
             use_hair = st.checkbox("Eliminar el pelo de la imagen", value=False)
             # --- CAMBIO: Usamos una key única que se actualiza para permitir "limpiar" el uploader ---
