@@ -5,7 +5,6 @@ import cv2
 import pandas as pd
 from PIL import Image
 from tensorflow.keras.models import load_model
-from tensorflow.keras.layers import RandomFlip
 from tensorflow.keras.applications.efficientnet_v2 import preprocess_input as effnet_preprocess
 import joblib
 import json
@@ -417,9 +416,9 @@ with tab_prediccion:
         st.markdown("### 1. Carga y Configuración")
         with st.container(border=True):
             model_choice = st.radio("Selecciona el modelo:", ("Híbrido (imagen + metadatos)", "Solo imagen"), horizontal=True)
-            # Checkbox para eliminar pelo
+
             use_hair = st.checkbox("Eliminar el pelo de la imagen", value=False)
-            # --- CAMBIO: Usamos una key única que se actualiza para permitir "limpiar" el uploader ---
+
             uploaded = st.file_uploader(
                 "Sube una imagen:", 
                 type=["jpg", "jpeg", "png"], 
@@ -444,11 +443,9 @@ with tab_prediccion:
     with col_display:
         st.markdown("### 2. Visualización y Resultados")
         
-        # --- LÓGICA DE PREDICCIÓN Y GUARDADO (REESTRUCTURADA) ---
         if submitted and uploaded:
             current_pred_name = st.session_state.pred_name
             
-            # Evitar nombres duplicados en el historial
             if any(record['name'] == current_pred_name for record in st.session_state.history):
                 st.error(f"El nombre '{current_pred_name}' ya existe en el historial. Por favor, elige un nombre único.")
             else:
@@ -467,7 +464,6 @@ with tab_prediccion:
                         X_meta = st.session_state.resources["preproc"].transform(df_meta)
                         inputs = [img_batch, X_meta]
                         model = st.session_state.resources["model_hybrid"]
-                        
              
                     else:
                         inputs = img_batch
@@ -493,7 +489,6 @@ with tab_prediccion:
                         fig.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 1])), showlegend=False, height=350, margin=dict(l=40, r=40, t=40, b=40))
                         st.plotly_chart(fig, use_container_width=True)
 
-                    # Guardar en historial usando el nombre correcto
                     st.session_state.history.append({
                         'name': current_pred_name, 'timestamp': time.strftime('%Y-%m-%d %H:%M:%S'),
                         'original': original, 'model': model_choice, 'label': label,
@@ -503,11 +498,9 @@ with tab_prediccion:
                     st.success(f'Análisis "{current_pred_name}" completado y guardado en el historial.')
 
         else:
-            # --- MEJORA: Mostrar la imagen cargada antes de predecir ---
             if uploaded:
                 st.image(uploaded, caption="Imagen cargada. Lista para analizar.", use_container_width=True)
             else:
-                 # --- MEJORA VISUAL: Placeholder más amigable ---
                 st.markdown("""
                 <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 400px; background-color: rgba(255, 255, 255, 0.5); border-radius: 15px; border: 2px dashed #c3cfe2;">
                     <p style="font-size: 24px;">🖼️</p>
@@ -519,7 +512,6 @@ with tab_prediccion:
 with tab_info:
     st.markdown("### 📚 Sobre la Aplicación")
     
-    # --- MEJORA DE DISEÑO: Uso de contenedores para organizar la información ---
     with st.container(border=True):
         st.markdown("""
         **Skin-AI** es un Trabajo de Fin de Grado (TFG) realizado por un estudiante de la Escuela Superior de Informática de Albacete. Su objetivo es demostrar las capacidades de los modelos de Deep Learning en dermatología computacional, utilizando modelos entrenados con **Aprendizaje Federado**.
@@ -534,7 +526,6 @@ with tab_info:
     st.markdown("#### Rendimiento de los Modelos")
     with st.container(border=True):
         st.markdown("A continuación se expone el porcentaje de acierto de cada modelo, medido en base a la precisión balanceada entre clases:")
-        # --- MEJORA VISUAL: Tabla para las métricas ---
         col1, col2 = st.columns(2)
         with col1:
             st.metric(label="Híbrido (Global)", value="72.2%")
