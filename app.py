@@ -387,11 +387,7 @@ with st.sidebar:
 st.title("🩺 Skin-AI: Asistente de Clasificación de Lesiones Cutáneas")
 st.caption("Una herramienta de IA para la clasificación preliminar de lesiones en la piel. Desarrollado como TFG.")
 
-tab_inicio, tab_prediccion, tab_info = st.tabs(
-    ["🏠 Inicio", "🧪 Nueva Predicción", "📚 Sobre la App"],
-    key="main_tabs"
-)
-
+tab_inicio, tab_prediccion, tab_info = st.tabs(["🏠 Inicio", "🧪 Nueva Predicción", "📚 Sobre la App"])
 
 with tab_inicio:
     st.markdown("### ¡Bienvenido a Skin-AI!")
