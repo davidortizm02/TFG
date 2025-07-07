@@ -44,12 +44,12 @@ MIN_LESION_AREA    = 100
 def load_all_resources():
     with open("feature_columns.json", "r") as f:
         feature_cols = json.load(f)
-    preprocessor = joblib.load("preprocessor_metadata_0,734.pkl")
-    label_encoder = joblib.load("labelencoder_class_0,734.pkl")
-    model_hybrid = load_model("modelo_hibrido_entrenadoCW_0,734.keras", compile=False)
+    preprocessor = joblib.load("preprocessor_metadata_global.pkl")
+    label_encoder = joblib.load("labelencoder_class_global.pkl")
+    model_hybrid = load_model("modelo_hibrido_global.keras", compile=False)
     model_img    = load_model("modelo_imagenes_entrenado2.keras", compile=False)
-    #model_fl    = load_model("modelo_hibrido_federado.keras", compile=False)
-    return feature_cols, preprocessor, label_encoder, model_hybrid, model_img
+    model_fl    = load_model("modelo_hibrido_federado.keras", compile=False)
+    return feature_cols, preprocessor, label_encoder, model_hybrid, model_img, model_fl
 
 # =====================
 # Funciones de segmentación y extracción de features
@@ -432,12 +432,18 @@ with tab_prediccion:
                 meta['sexo'] = st.selectbox("Sexo:", ["male", "female", "unknown"])
                 meta['zona'] = st.selectbox("Zona anatómica:", ["anterior torso","head/neck","lateral torso","lower extremity","upper extremity","oral/genital","palms/soles","posterior torso","unknown"])
                 meta['dataset'] = st.selectbox("Fuente del dataset:", ["BCN_nan","HAM_vidir_molemax","HAM_vidir_modern","HAM_rosendahl","MSK4nan","HAM_vienna_dias"])
+            elif model_choice.startswith("Federado"):
+                st.markdown("##### Datos del Paciente")
+                meta['edad'] = st.number_input("Edad:", min_value=1, max_value=100, value=50, step=1)
+                meta['sexo'] = st.selectbox("Sexo:", ["male", "female", "unknown"])
+                meta['zona'] = st.selectbox("Zona anatómica:", ["anterior torso","head/neck","lateral torso","lower extremity","upper extremity","oral/genital","palms/soles","posterior torso","unknown"])
+                
             
-            # El text_input sigue vinculado al session_state para capturar el nombre
             st.text_input("Nombre para este registro:", key="pred_name")
             
-            # El botón de predicción, deshabilitado si no hay imagen
             submitted = st.button("🔍 Realizar Predicción", use_container_width=True, disabled=(uploaded is None))
+            
+
 
     with col_display:
         st.markdown("### 2. Visualización y Resultados")
@@ -465,6 +471,18 @@ with tab_prediccion:
                         X_meta = st.session_state.resources["preproc"].transform(df_meta)
                         inputs = [img_batch, X_meta]
                         model = st.session_state.resources["model_hybrid"]
+                        
+                    elif model_choice.startswith("Federado"):
+                        img_vis_array = np.array(img_vis)
+                        gray = cv2.cvtColor(img_vis_array, cv2.COLOR_RGB2GRAY)
+                        feats_raw, _ = extract_features_from_array(img_vis_array, gray)
+                        grp = ('young' if meta['edad'] <= 35 else 'adult' if meta['edad'] <= 65 else 'senior')
+                        age_sex_interaction = f"{meta['sexo']}_{grp}"
+                        full_meta_dict = {"age_approx": meta['edad'], "sex": meta['sexo'], "anatom_site_general": meta['zona'], "dataset": "BCN_nan", "age_sex_interaction": age_sex_interaction, **feats_raw}
+                        df_meta = pd.DataFrame([full_meta_dict])
+                        X_meta = st.session_state.resources["preproc"].transform(df_meta)
+                        inputs = [img_batch, X_meta]
+                        model = st.session_state.resources["model_fl"]
                     else:
                         inputs = img_batch
                         model = st.session_state.resources["model_img"]
