@@ -57,7 +57,11 @@ def load_all_resources():
     preprocessor = joblib.load("preprocessor_metadata_global.pkl")
     label_encoder = joblib.load("labelencoder_class_global.pkl")
     model_hybrid = load_model("modelo_hibrido_global.keras", compile=False)
-    model_img    = load_model("modelo_imagenes_entrenado2.keras", compile=False)
+    model_img = load_model(
+        "modelo_imagenes_entrenado2.keras",
+        compile=False,
+        custom_objects=custom_objects  # Añadido aquí
+    )
     model_fl     = load_model("modelo_hibrido_federado.keras",
                               compile=False,
                               custom_objects=custom_objects)
