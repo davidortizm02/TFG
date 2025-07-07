@@ -41,25 +41,6 @@ MIN_LESION_AREA    = 100
 # Carga de recursos (cacheado)
 # =====================
 
-from tensorflow.keras import layers, Model
-import tensorflow as tf
-
-# Definir capas "dummy" (vacías) para evitar los problemas de deserialización
-class DummyLayer(layers.Layer):
-    def __init__(self, **kwargs):
-        super(DummyLayer, self).__init__(**kwargs)
-
-    def call(self, inputs):
-        return inputs  # Simplemente retorna la entrada sin modificación
-
-def custom_load_model(model_path):
-    return load_model(model_path, custom_objects={
-        'RandomFlip': DummyLayer,
-        'RandomRotation': DummyLayer,
-        'RandomZoom': DummyLayer,
-        'RandomTranslation': DummyLayer,
-        'RandomContrast': DummyLayer
-    }, compile=False)
 @st.cache_resource
 def load_all_resources():
     
@@ -69,10 +50,8 @@ def load_all_resources():
     preprocessor = joblib.load("preprocessor_metadata_global.pkl")
     label_encoder = joblib.load("labelencoder_class_global.pkl")
     model_hybrid = load_model("modelo_hibrido_global.keras", compile=False)
-    model_img = custom_load_model(
-        "modelo_imagenes_entrenado2.keras")
-    model_fl = custom_load_model("modelo_hibrido_federado.keras")
-    return feature_cols, preprocessor, label_encoder, model_hybrid, model_img, model_fl
+    model_img = load_model("modelo_imagenes_entrenado2.keras", compile=False)
+    return feature_cols, preprocessor, label_encoder, model_hybrid, model_img
 
 # =====================
 # Funciones de segmentación y extracción de features
@@ -437,7 +416,7 @@ with tab_prediccion:
     with col_config:
         st.markdown("### 1. Carga y Configuración")
         with st.container(border=True):
-            model_choice = st.radio("Selecciona el modelo:", ("Híbrido (imagen + metadatos)", "Solo imagen", "Federado"), horizontal=True)
+            model_choice = st.radio("Selecciona el modelo:", ("Híbrido (imagen + metadatos)", "Solo imagen"), horizontal=True)
             # Checkbox para eliminar pelo
             use_hair = st.checkbox("Eliminar el pelo de la imagen", value=False)
             # --- CAMBIO: Usamos una key única que se actualiza para permitir "limpiar" el uploader ---
@@ -455,13 +434,7 @@ with tab_prediccion:
                 meta['sexo'] = st.selectbox("Sexo:", ["male", "female", "unknown"])
                 meta['zona'] = st.selectbox("Zona anatómica:", ["anterior torso","head/neck","lateral torso","lower extremity","upper extremity","oral/genital","palms/soles","posterior torso","unknown"])
                 meta['dataset'] = st.selectbox("Fuente del dataset:", ["BCN_nan","HAM_vidir_molemax","HAM_vidir_modern","HAM_rosendahl","MSK4nan","HAM_vienna_dias"])
-            elif model_choice.startswith("Federado"):
-                st.markdown("##### Datos del Paciente")
-                meta['edad'] = st.number_input("Edad:", min_value=1, max_value=100, value=50, step=1)
-                meta['sexo'] = st.selectbox("Sexo:", ["male", "female", "unknown"])
-                meta['zona'] = st.selectbox("Zona anatómica:", ["anterior torso","head/neck","lateral torso","lower extremity","upper extremity","oral/genital","palms/soles","posterior torso","unknown"])
-                
-            
+           
             st.text_input("Nombre para este registro:", key="pred_name")
             
             submitted = st.button("🔍 Realizar Predicción", use_container_width=True, disabled=(uploaded is None))
@@ -495,17 +468,7 @@ with tab_prediccion:
                         inputs = [img_batch, X_meta]
                         model = st.session_state.resources["model_hybrid"]
                         
-                    elif model_choice.startswith("Federado"):
-                        img_vis_array = np.array(img_vis)
-                        gray = cv2.cvtColor(img_vis_array, cv2.COLOR_RGB2GRAY)
-                        feats_raw, _ = extract_features_from_array(img_vis_array, gray)
-                        grp = ('young' if meta['edad'] <= 35 else 'adult' if meta['edad'] <= 65 else 'senior')
-                        age_sex_interaction = f"{meta['sexo']}_{grp}"
-                        full_meta_dict = {"age_approx": meta['edad'], "sex": meta['sexo'], "anatom_site_general": meta['zona'], "dataset": "BCN_nan", "age_sex_interaction": age_sex_interaction, **feats_raw}
-                        df_meta = pd.DataFrame([full_meta_dict])
-                        X_meta = st.session_state.resources["preproc"].transform(df_meta)
-                        inputs = [img_batch, X_meta]
-                        model = st.session_state.resources["model_fl"]
+             
                     else:
                         inputs = img_batch
                         model = st.session_state.resources["model_img"]
