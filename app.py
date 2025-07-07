@@ -41,23 +41,25 @@ MIN_LESION_AREA    = 100
 # Carga de recursos (cacheado)
 # =====================
 
-from tensorflow.keras.layers import Layer
+from tensorflow.keras import layers, Model
+import tensorflow as tf
 
-class DummyRandomFlip(Layer):
+# Definir capas "dummy" (vacías) para evitar los problemas de deserialización
+class DummyLayer(layers.Layer):
     def __init__(self, **kwargs):
-        super(DummyRandomFlip, self).__init__(**kwargs)
+        super(DummyLayer, self).__init__(**kwargs)
 
     def call(self, inputs):
-        # Aquí, puedes simplemente devolver la entrada sin ninguna operación
-        return inputs
+        return inputs  # Simplemente retorna la entrada sin modificación
 
-    def get_config(self):
-        return {}  # No incluir parámetros para la serialización
-
-# Cargar el modelo usando custom_objects
 def custom_load_model(model_path):
-    return load_model(model_path, custom_objects={"RandomFlip": DummyRandomFlip}, compile=False)
-
+    return load_model(model_path, custom_objects={
+        'RandomFlip': DummyLayer,
+        'RandomRotation': DummyLayer,
+        'RandomZoom': DummyLayer,
+        'RandomTranslation': DummyLayer,
+        'RandomContrast': DummyLayer
+    }, compile=False)
 @st.cache_resource
 def load_all_resources():
     
@@ -67,8 +69,8 @@ def load_all_resources():
     preprocessor = joblib.load("preprocessor_metadata_global.pkl")
     label_encoder = joblib.load("labelencoder_class_global.pkl")
     model_hybrid = load_model("modelo_hibrido_global.keras", compile=False)
-    model_img = load_model(
-        "modelo_imagenes_entrenado2.keras", compile=False)
+    model_img = custom_load_model(
+        "modelo_imagenes_entrenado2.keras")
     model_fl = custom_load_model("modelo_hibrido_federado.keras")
     return feature_cols, preprocessor, label_encoder, model_hybrid, model_img, model_fl
 
