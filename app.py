@@ -5,6 +5,7 @@ import cv2
 import pandas as pd
 from PIL import Image
 from tensorflow.keras.models import load_model
+from tensorflow.keras.layers import RandomFlip as _RandomFlip
 from tensorflow.keras.applications.efficientnet_v2 import preprocess_input as effnet_preprocess
 import joblib
 import json
@@ -36,6 +37,12 @@ MORPH_OPEN_RADIUS  = 3
 MORPH_CLOSE_RADIUS = 5
 MIN_LESION_AREA    = 100
 
+class RandomFlip(_RandomFlip):
+    def __init__(self, **kwargs):
+        # Quitamos data_format si está presente
+        kwargs.pop('data_format', None)
+        super().__init__(**kwargs)
+
 
 # =====================
 # Carga de recursos (cacheado)
@@ -44,11 +51,15 @@ MIN_LESION_AREA    = 100
 def load_all_resources():
     with open("feature_columns.json", "r") as f:
         feature_cols = json.load(f)
+        
+    custom_objs = {'RandomFlip': RandomFlip}
     preprocessor = joblib.load("preprocessor_metadata_global.pkl")
     label_encoder = joblib.load("labelencoder_class_global.pkl")
     model_hybrid = load_model("modelo_hibrido_global.keras", compile=False)
     model_img    = load_model("modelo_imagenes_entrenado2.keras", compile=False)
-    model_fl    = load_model("modelo_hibrido_federado.keras", compile=False)
+    model_fl     = load_model("modelo_hibrido_federado.keras",
+                              compile=False,
+                              custom_objects=custom_objs)
     return feature_cols, preprocessor, label_encoder, model_hybrid, model_img, model_fl
 
 # =====================
