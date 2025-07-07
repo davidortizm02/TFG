@@ -538,6 +538,7 @@ with tab_info:
         col1, col2 = st.columns(2)
         with col1:
             st.metric(label="Híbrido (Global)", value="72.2%")
+        with col2:
             st.metric(label="Solo Imagen (Federado)", value="64.2%")
 
 
